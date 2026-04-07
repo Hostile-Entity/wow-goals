@@ -78,6 +78,17 @@ h3 {
   font-size: 0.82rem;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-btn {
+  padding: 4px 8px;
+  font-size: 0.72rem;
+}
+
 .main {
   padding: 12px;
   display: grid;
@@ -130,6 +141,12 @@ button:hover {
 button.active,
 button.ok {
   background: color-mix(in srgb, var(--accent) 38%, var(--panel));
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 button.danger {

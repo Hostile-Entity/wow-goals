@@ -41,6 +41,10 @@ function App() {
   });
   const [noteInput, setNoteInput] = useState("");
   const [popup, setPopup] = useState<PopupTarget>(null);
+  const [showSettingsPopup, setShowSettingsPopup] = useState(false);
+  const [swVersion, setSwVersion] = useState("unknown");
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isApplyingUpdate, setIsApplyingUpdate] = useState(false);
 
   const logicalDay = state.settings.logicalDate;
 
@@ -77,6 +81,178 @@ function App() {
   useEffect(() => {
     void reloadAll();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolveCachedVersion(): Promise<string | null> {
+      if (!("caches" in window)) return null;
+      try {
+        const keys = await caches.keys();
+        const versions = keys
+          .map((key) => {
+            const match = key.match(/wow-goals-v(\d+)/i);
+            return match ? Number(match[1]) : null;
+          })
+          .filter((v): v is number => v !== null);
+        if (versions.length === 0) return null;
+        return `v${Math.max(...versions)}`;
+      } catch {
+        return null;
+      }
+    }
+
+    async function fetchVersion() {
+      try {
+        const cachedVersion = await resolveCachedVersion();
+        if (!cancelled && cachedVersion) {
+          setSwVersion(cachedVersion);
+        }
+
+        const resp = await fetch(`${import.meta.env.BASE_URL}sw.js?ts=${Date.now()}`, { cache: "no-store" });
+        if (!resp.ok) {
+          if (!cancelled && !cachedVersion) setSwVersion("unknown");
+          return;
+        }
+
+        const code = await resp.text();
+        const match = code.match(/wow-goals-v(\d+)/i);
+        if (!cancelled) {
+          setSwVersion(match ? `v${match[1]}` : (cachedVersion ?? "unknown"));
+        }
+      } catch {
+        if (!cancelled) {
+          const cachedVersion = await resolveCachedVersion();
+          setSwVersion(cachedVersion ?? "unknown");
+        }
+      }
+    }
+
+    void fetchVersion();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function getRegistration() {
+    if (!("serviceWorker" in navigator)) {
+      throw new Error("Service workers are not supported in this browser.");
+    }
+
+    const reg =
+      (await navigator.serviceWorker.getRegistration(import.meta.env.BASE_URL)) ??
+      (await navigator.serviceWorker.getRegistration());
+
+    if (!reg) {
+      throw new Error("Service worker is not registered yet.");
+    }
+
+    return reg;
+  }
+
+  async function waitForWaitingWorker(reg: ServiceWorkerRegistration, timeoutMs: number): Promise<ServiceWorker | null> {
+    if (reg.waiting) return reg.waiting;
+
+    return new Promise<ServiceWorker | null>((resolve) => {
+      let resolved = false;
+
+      const finish = (worker: ServiceWorker | null) => {
+        if (resolved) return;
+        resolved = true;
+        resolve(worker);
+      };
+
+      const timer = window.setTimeout(() => {
+        finish(reg.waiting ?? null);
+      }, timeoutMs);
+
+      const onUpdateFound = () => {
+        const installing = reg.installing;
+        if (!installing) return;
+
+        installing.addEventListener("statechange", () => {
+          if (installing.state === "installed") {
+            window.clearTimeout(timer);
+            finish(reg.waiting ?? installing);
+          } else if (installing.state === "redundant") {
+            window.clearTimeout(timer);
+            finish(null);
+          }
+        });
+      };
+
+      reg.addEventListener("updatefound", onUpdateFound, { once: true });
+
+      if (reg.installing) {
+        onUpdateFound();
+      }
+    });
+  }
+
+  async function applyUpdate(): Promise<void> {
+    setIsApplyingUpdate(true);
+    try {
+      const reg = await getRegistration();
+      await reg.update();
+      const targetWorker = await waitForWaitingWorker(reg, 8000);
+      if (!targetWorker) {
+        window.alert("No new update to apply right now.");
+        return;
+      }
+
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          resolve();
+        };
+
+        navigator.serviceWorker.addEventListener("controllerchange", finish, { once: true });
+        targetWorker.postMessage({ type: "SKIP_WAITING" });
+        window.setTimeout(finish, 4000);
+      });
+
+      window.location.reload();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to apply update.";
+      window.alert(`Apply failed: ${msg}`);
+    } finally {
+      setIsApplyingUpdate(false);
+    }
+  }
+
+  async function checkForUpdates(): Promise<void> {
+    setIsCheckingUpdate(true);
+    try {
+      await getRegistration();
+      const resp = await fetch(`${import.meta.env.BASE_URL}sw.js?ts=${Date.now()}`, { cache: "no-store" });
+      if (!resp.ok) throw new Error(`Failed to fetch sw.js (${resp.status})`);
+
+      const code = await resp.text();
+      const match = code.match(/wow-goals-v(\d+)/i);
+      if (!match) throw new Error("Could not read version from sw.js");
+
+      const remote = Number(match[1]);
+      const current = Number(swVersion.replace(/[^0-9]/g, ""));
+      if (!Number.isFinite(remote)) throw new Error("Invalid version in sw.js");
+
+      if (!current || remote > current) {
+        const shouldApply = window.confirm(`Update v${remote} is available.\n\nApply now?`);
+        if (shouldApply) {
+          await applyUpdate();
+        }
+      } else {
+        window.alert(`You are up to date (v${remote}).`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Update check failed.";
+      window.alert(`Update check failed: ${msg}`);
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  }
 
   async function logEvent(action: string, entityType: string, entityId: string | undefined, detail: string): Promise<void> {
     const log: EventLog = {
@@ -429,7 +605,12 @@ function App() {
     <div className="app">
       <header className="topbar">
         <h1>WowGoals</h1>
-        <div className="meta">Day {logicalDay}</div>
+        <div className="topbar-actions">
+          <div className="meta">Day {logicalDay}</div>
+          <button className="settings-btn" onClick={() => setShowSettingsPopup(true)} aria-label="Open app settings">
+            Settings
+          </button>
+        </div>
       </header>
 
       <main className="main">
@@ -656,6 +837,26 @@ function App() {
           </section>
         )}
       </main>
+
+      {showSettingsPopup && (
+        <div className="modal-backdrop" onClick={() => setShowSettingsPopup(false)}>
+          <section className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="card-top">
+              <h3>App Settings</h3>
+              <button onClick={() => setShowSettingsPopup(false)}>Close</button>
+            </div>
+            <div className="card">
+              <div className="title">Application Version</div>
+              <div className="tags">Version: {swVersion}</div>
+              <div className="actions">
+                <button onClick={() => void checkForUpdates()} disabled={isCheckingUpdate || isApplyingUpdate}>
+                  {isApplyingUpdate ? "Applying update..." : isCheckingUpdate ? "Checking updates..." : "Check for update"}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       {popup && (
         <div className="modal-backdrop" onClick={() => setPopup(null)}>
