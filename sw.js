@@ -1,5 +1,4 @@
-const CACHE_NAME = "wow-goals-v5";
-let networkFirstUntil = 0;
+const CACHE_NAME = "wow-goals-v6";
 
 const scopeUrl = new URL(self.registration.scope);
 const BASE_PATH = scopeUrl.pathname;
@@ -59,28 +58,6 @@ async function cacheFirst(request) {
   }
 }
 
-async function networkFirst(request) {
-  const cache = await caches.open(CACHE_NAME);
-
-  try {
-    const response = await fetch(request, { cache: "no-store" });
-    if (response.ok && canRuntimeCache(new URL(request.url))) {
-      await cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    const cached = await cache.match(request);
-    if (cached) return cached;
-
-    if (isNavigationRequest(request)) {
-      const appShell = (await cache.match(`${BASE_PATH}index.html`)) ?? (await cache.match(BASE_PATH));
-      if (appShell) return appShell;
-    }
-
-    throw new Error("Offline and not cached");
-  }
-}
-
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
@@ -123,22 +100,6 @@ self.addEventListener("message", (event) => {
 
   if (message.type === "SKIP_WAITING") {
     self.skipWaiting();
-    return;
-  }
-
-  if (message.type === "FORCE_NETWORK_ONCE") {
-    const ttlRaw = message.ttlMs;
-    const ttlMs = typeof ttlRaw === "number" && Number.isFinite(ttlRaw) ? ttlRaw : 15000;
-    const boundedTtl = Math.max(1000, Math.min(60000, Math.round(ttlMs)));
-    networkFirstUntil = Date.now() + boundedTtl;
-
-    const replyPort = event.ports?.[0];
-    if (replyPort) {
-      replyPort.postMessage({
-        ok: true,
-        networkFirstUntil,
-      });
-    }
   }
 });
 
@@ -152,5 +113,5 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(networkFirst(request));
+  event.respondWith(cacheFirst(request));
 });
