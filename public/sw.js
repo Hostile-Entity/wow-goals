@@ -1,4 +1,4 @@
-const CACHE_NAME = "wow-goals-v3";
+const CACHE_NAME = "wow-goals-v10";
 
 const scopeUrl = new URL(self.registration.scope);
 const BASE_PATH = scopeUrl.pathname;
@@ -49,6 +49,28 @@ async function cacheFirst(request) {
     }
     return response;
   } catch {
+    if (isNavigationRequest(request)) {
+      const appShell = (await cache.match(`${BASE_PATH}index.html`)) ?? (await cache.match(BASE_PATH));
+      if (appShell) return appShell;
+    }
+
+    throw new Error("Offline and not cached");
+  }
+}
+
+async function networkFirst(request) {
+  const cache = await caches.open(CACHE_NAME);
+
+  try {
+    const response = await fetch(request, { cache: "no-store" });
+    if (response.ok && canRuntimeCache(new URL(request.url))) {
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+
     if (isNavigationRequest(request)) {
       const appShell = (await cache.match(`${BASE_PATH}index.html`)) ?? (await cache.match(BASE_PATH));
       if (appShell) return appShell;
@@ -113,5 +135,5 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(cacheFirst(request));
+  event.respondWith(networkFirst(request));
 });
