@@ -13,7 +13,6 @@
   --tabs-height: 62px;
   --notes-composer-height: 60px;
   --notes-composer-live-height: 60px;
-  --keyboard-offset: 0px;
 }
 
 * {
@@ -44,7 +43,8 @@ body {
 .app {
   max-width: 760px;
   margin: 0 auto;
-  height: var(--app-height, 100vh);
+  height: 100vh;
+  height: 100dvh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
@@ -151,6 +151,10 @@ h3 {
 
 .app.notes-mode .main {
   padding-bottom: calc(var(--tabs-height) + var(--notes-composer-live-height) + env(safe-area-inset-bottom) + 12px);
+}
+
+.app.notes-mode.keyboard-open .main {
+  padding-bottom: calc(var(--notes-composer-live-height) + env(safe-area-inset-bottom) + 12px);
 }
 
 .row {
@@ -405,11 +409,18 @@ button.danger {
   transform: translateX(-50%);
   width: min(760px, 100%);
   padding: 8px 12px;
-  bottom: calc(var(--tabs-height) + env(safe-area-inset-bottom) + var(--keyboard-offset));
+  bottom: calc(var(--tabs-height) + env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--bg) 86%, transparent);
-  backdrop-filter: blur(10px);
   border-top: 1px solid var(--line);
   z-index: 12;
+}
+
+.app.notes-mode.keyboard-open .tabs {
+  display: none;
+}
+
+.app.notes-mode.keyboard-open .notes-composer {
+  bottom: env(safe-area-inset-bottom);
 }
 
 .notes-composer .row {

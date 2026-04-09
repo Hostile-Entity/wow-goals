@@ -85,6 +85,7 @@ function App() {
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isApplyingUpdate, setIsApplyingUpdate] = useState(false);
   const [moreTab, setMoreTab] = useState<MoreTab>("routines");
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [filters, setFilters] = useState<Record<FilterKey, StatusFilter>>({
     notes: "all",
     tasks: "all",
@@ -133,37 +134,46 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const root = document.documentElement;
-    let baseHeight = window.innerHeight;
+    let baselineHeight = window.innerHeight;
 
-    const updateViewportVars = () => {
-      const vv = window.visualViewport;
-      const viewportHeight = window.innerHeight;
-      const keyboardOpen = vv ? baseHeight - vv.height > 80 : false;
-
-      if (!keyboardOpen && Math.abs(viewportHeight - baseHeight) > 120) {
-        baseHeight = viewportHeight;
-      }
-
-      root.style.setProperty("--app-height", `${baseHeight}px`);
-
-      const keyboardOffset = vv ? Math.max(0, baseHeight - vv.height - vv.offsetTop) : 0;
-      root.style.setProperty("--keyboard-offset", `${Math.round(keyboardOffset)}px`);
+    const hasEditableFocus = () => {
+      const active = document.activeElement;
+      if (!active) return false;
+      if (active instanceof HTMLInputElement) return true;
+      if (active instanceof HTMLTextAreaElement) return true;
+      if (active instanceof HTMLSelectElement) return true;
+      return active instanceof HTMLElement && active.isContentEditable;
     };
 
-    updateViewportVars();
+    const updateKeyboardVisibility = () => {
+      const vv = window.visualViewport;
+      const viewportHeight = window.innerHeight;
+      const visibleHeight = vv ? vv.height + vv.offsetTop : viewportHeight;
+      const isFocused = hasEditableFocus();
+
+      if (!isFocused && Math.abs(viewportHeight - baselineHeight) > 120) {
+        baselineHeight = viewportHeight;
+      }
+
+      const keyboardOpen = isFocused && baselineHeight - visibleHeight > 80;
+      setIsKeyboardVisible((prev) => (prev === keyboardOpen ? prev : keyboardOpen));
+    };
+
+    updateKeyboardVisibility();
 
     const vv = window.visualViewport;
-    window.addEventListener("resize", updateViewportVars);
-    vv?.addEventListener("resize", updateViewportVars);
-    vv?.addEventListener("scroll", updateViewportVars);
+    window.addEventListener("resize", updateKeyboardVisibility);
+    window.addEventListener("focusin", updateKeyboardVisibility);
+    window.addEventListener("focusout", updateKeyboardVisibility);
+    vv?.addEventListener("resize", updateKeyboardVisibility);
+    vv?.addEventListener("scroll", updateKeyboardVisibility);
 
     return () => {
-      window.removeEventListener("resize", updateViewportVars);
-      vv?.removeEventListener("resize", updateViewportVars);
-      vv?.removeEventListener("scroll", updateViewportVars);
-      root.style.removeProperty("--keyboard-offset");
-      root.style.removeProperty("--app-height");
+      window.removeEventListener("resize", updateKeyboardVisibility);
+      window.removeEventListener("focusin", updateKeyboardVisibility);
+      window.removeEventListener("focusout", updateKeyboardVisibility);
+      vv?.removeEventListener("resize", updateKeyboardVisibility);
+      vv?.removeEventListener("scroll", updateKeyboardVisibility);
     };
   }, []);
 
@@ -781,7 +791,7 @@ function App() {
   if (!loaded) return <div className="loading">Loading control deck...</div>;
 
   return (
-    <div className={`app ${tab === "notes" ? "notes-mode" : ""}`}>
+    <div className={`app ${tab === "notes" ? "notes-mode" : ""} ${tab === "notes" && isKeyboardVisible ? "keyboard-open" : ""}`}>
       <header className="topbar">
         <h1>WowGoals</h1>
         <div className="topbar-actions">
