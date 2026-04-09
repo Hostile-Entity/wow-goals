@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { deleteItem, getAll, getById, putItem, toDayString, toWeekKey, uid } from "./db";
 import {
   AppSettings,
@@ -14,15 +14,53 @@ import {
   WeeklyReview,
 } from "./types";
 
-type Tab = "notes" | "tasks" | "today" | "routines" | "projects" | "goals" | "review" | "debug";
+type Tab = "notes" | "tasks" | "today" | "projects" | "more";
+type MoreTab = "routines" | "goals" | "review";
 type PopupTarget = { type: EntityType; id: string } | null;
+type StatusFilter = "all" | "active" | "inactive" | "completed" | "discarded";
+type FilterKey = "notes" | "tasks" | "projects" | "routines" | "goals";
+type StatusBucket = Exclude<StatusFilter, "all">;
+type SortableEntity = { status: "active" | "completed" | "discarded"; updatedAt: string; isActive?: boolean };
 
 const emptySettings: AppSettings = { id: "settings", logicalDate: toDayString() };
 
 const nowIso = () => new Date().toISOString();
 
-function byUpdated<T extends { updatedAt: string }>(a: T, b: T): number {
-  return b.updatedAt.localeCompare(a.updatedAt);
+const statusRank: Record<StatusBucket, number> = {
+  active: 0,
+  inactive: 1,
+  completed: 2,
+  discarded: 3,
+};
+
+function getStatusBucket(item: SortableEntity): StatusBucket {
+  if (item.status === "discarded") return "discarded";
+  if (item.status === "completed") return "completed";
+  if (item.isActive === false) return "inactive";
+  return "active";
+}
+
+function sortAndFilterItems<T extends SortableEntity>(items: T[], filter: StatusFilter): T[] {
+  const sorted = [...items].sort((a, b) => {
+    const rankDiff = statusRank[getStatusBucket(a)] - statusRank[getStatusBucket(b)];
+    if (rankDiff !== 0) return rankDiff;
+    return b.updatedAt.localeCompare(a.updatedAt);
+  });
+  if (filter === "all") return sorted;
+  return sorted.filter((item) => getStatusBucket(item) === filter);
+}
+
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return iso.slice(0, 16).replace("T", " ");
+  }
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
 }
 
 function App() {
@@ -42,9 +80,21 @@ function App() {
   const [noteInput, setNoteInput] = useState("");
   const [popup, setPopup] = useState<PopupTarget>(null);
   const [showSettingsPopup, setShowSettingsPopup] = useState(false);
+  const [showDebugTools, setShowDebugTools] = useState(false);
   const [swVersion, setSwVersion] = useState("unknown");
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isApplyingUpdate, setIsApplyingUpdate] = useState(false);
+  const [moreTab, setMoreTab] = useState<MoreTab>("routines");
+  const [filters, setFilters] = useState<Record<FilterKey, StatusFilter>>({
+    notes: "all",
+    tasks: "all",
+    projects: "all",
+    routines: "all",
+    goals: "all",
+  });
+  const [openFilterMenu, setOpenFilterMenu] = useState<FilterKey | null>(null);
+  const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const noteComposerRef = useRef<HTMLFormElement | null>(null);
 
   const logicalDay = state.settings.logicalDate;
 
@@ -81,6 +131,83 @@ function App() {
   useEffect(() => {
     void reloadAll();
   }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    let baseHeight = window.innerHeight;
+
+    const updateViewportVars = () => {
+      const vv = window.visualViewport;
+      const viewportHeight = window.innerHeight;
+      const keyboardOpen = vv ? baseHeight - vv.height > 80 : false;
+
+      if (!keyboardOpen && Math.abs(viewportHeight - baseHeight) > 120) {
+        baseHeight = viewportHeight;
+      }
+
+      root.style.setProperty("--app-height", `${baseHeight}px`);
+
+      const keyboardOffset = vv ? Math.max(0, baseHeight - vv.height - vv.offsetTop) : 0;
+      root.style.setProperty("--keyboard-offset", `${Math.round(keyboardOffset)}px`);
+    };
+
+    updateViewportVars();
+
+    const vv = window.visualViewport;
+    window.addEventListener("resize", updateViewportVars);
+    vv?.addEventListener("resize", updateViewportVars);
+    vv?.addEventListener("scroll", updateViewportVars);
+
+    return () => {
+      window.removeEventListener("resize", updateViewportVars);
+      vv?.removeEventListener("resize", updateViewportVars);
+      vv?.removeEventListener("scroll", updateViewportVars);
+      root.style.removeProperty("--keyboard-offset");
+      root.style.removeProperty("--app-height");
+    };
+  }, []);
+
+  useEffect(() => {
+    const textarea = noteTextareaRef.current;
+    if (!textarea) return;
+
+    const styles = window.getComputedStyle(textarea);
+    const lineHeight = parseFloat(styles.lineHeight) || 20;
+    const paddingTop = parseFloat(styles.paddingTop) || 0;
+    const paddingBottom = parseFloat(styles.paddingBottom) || 0;
+    const borderTop = parseFloat(styles.borderTopWidth) || 0;
+    const borderBottom = parseFloat(styles.borderBottomWidth) || 0;
+    const maxHeight = lineHeight * 6 + paddingTop + paddingBottom + borderTop + borderBottom;
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+
+    const composer = noteComposerRef.current;
+    if (composer) {
+      document.documentElement.style.setProperty("--notes-composer-live-height", `${composer.offsetHeight}px`);
+    }
+  }, [noteInput, tab]);
+
+  useEffect(() => {
+    const updateComposerHeight = () => {
+      const composer = noteComposerRef.current;
+      if (composer) {
+        document.documentElement.style.setProperty("--notes-composer-live-height", `${composer.offsetHeight}px`);
+      }
+    };
+
+    window.addEventListener("resize", updateComposerHeight);
+    updateComposerHeight();
+
+    return () => {
+      window.removeEventListener("resize", updateComposerHeight);
+    };
+  }, []);
+
+  useEffect(() => {
+    setOpenFilterMenu(null);
+  }, [tab, moreTab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -312,9 +439,13 @@ function App() {
 
   async function addNote(e: FormEvent) {
     e.preventDefault();
-    const title = noteInput.trim();
+    const lines = noteInput.replace(/\r\n/g, "\n").split("\n");
+    const titleLineIndex = lines.findIndex((line) => line.trim().length > 0);
+    if (titleLineIndex < 0) return;
+    const title = lines[titleLineIndex].trim();
     if (!title) return;
-    const note: Note = { ...makeBase(title) };
+    const description = lines.slice(titleLineIndex + 1).join("\n").trim();
+    const note: Note = { ...makeBase(title), description };
     await putItem("notes", note);
     await logEvent("create", "note", note.id, "Captured note in inbox");
     setNoteInput("");
@@ -580,6 +711,11 @@ function App() {
     await reloadAll();
   }
 
+  function closeSettingsPopup(): void {
+    setShowSettingsPopup(false);
+    setShowDebugTools(false);
+  }
+
   const activeTasks = useMemo(
     () =>
       state.tasks
@@ -589,6 +725,17 @@ function App() {
   );
 
   const todayTop3 = activeTasks.slice(0, 3);
+  const filteredNotes = useMemo(() => sortAndFilterItems(state.notes, filters.notes), [state.notes, filters.notes]);
+  const filteredTasks = useMemo(() => sortAndFilterItems(state.tasks, filters.tasks), [state.tasks, filters.tasks]);
+  const filteredProjects = useMemo(
+    () => sortAndFilterItems(state.projects, filters.projects),
+    [state.projects, filters.projects],
+  );
+  const filteredRoutines = useMemo(
+    () => sortAndFilterItems(state.routines, filters.routines),
+    [state.routines, filters.routines],
+  );
+  const filteredGoals = useMemo(() => sortAndFilterItems(state.goals, filters.goals), [state.goals, filters.goals]);
   const linkableGoals = useMemo(() => state.goals.filter((g) => g.status !== "discarded"), [state.goals]);
   const linkableProjects = useMemo(() => state.projects.filter((p) => p.status !== "discarded"), [state.projects]);
   const completedTodayCount = state.completions.filter((c) => c.date === logicalDay && c.entityType === "task").length;
@@ -599,10 +746,42 @@ function App() {
   const selectedRoutine = popup?.type === "routine" ? state.routines.find((r) => r.id === popup.id) : undefined;
   const selectedGoal = popup?.type === "goal" ? state.goals.find((g) => g.id === popup.id) : undefined;
 
+  function statusLabel(item: SortableEntity): string {
+    return getStatusBucket(item);
+  }
+
+  function renderFilterControl(key: FilterKey): JSX.Element {
+    const options: StatusFilter[] = ["all", "active", "inactive", "completed", "discarded"];
+    const current = filters[key];
+    return (
+      <div className="filter-wrap">
+        <button className="filter-btn" onClick={() => setOpenFilterMenu((prev) => (prev === key ? null : key))}>
+          Filter: {current}
+        </button>
+        {openFilterMenu === key && (
+          <div className="filter-menu">
+            {options.map((option) => (
+              <button
+                key={option}
+                className={current === option ? "active" : ""}
+                onClick={() => {
+                  setFilters((prev) => ({ ...prev, [key]: option }));
+                  setOpenFilterMenu(null);
+                }}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (!loaded) return <div className="loading">Loading control deck...</div>;
 
   return (
-    <div className="app">
+    <div className={`app ${tab === "notes" ? "notes-mode" : ""}`}>
       <header className="topbar">
         <h1>WowGoals</h1>
         <div className="topbar-actions">
@@ -616,24 +795,26 @@ function App() {
       <main className="main">
         {tab === "notes" && (
           <section>
-            <h2>Capture &amp; Triage</h2>
-            <form onSubmit={addNote} className="row">
-              <input
-                value={noteInput}
-                onChange={(e) => setNoteInput(e.target.value)}
-                placeholder="Capture thought, idea, obligation..."
-              />
-              <button type="submit">Add</button>
-            </form>
+            <div className="section-head">
+              <h2>Capture &amp; Triage</h2>
+              {renderFilterControl("notes")}
+            </div>
             <div className="cards">
-              {state.notes.sort(byUpdated).map((note) => (
-                <article key={note.id} className="card">
-                  <div className="card-top">
-                    <div className="title">{note.title}</div>
-                    <button onClick={() => setPopup({ type: "note", id: note.id })}>Manage</button>
+              {filteredNotes.map((note) => (
+                <article key={note.id} className={`card note-card ${getStatusBucket(note) !== "active" ? "is-dimmed" : ""}`}>
+                  <div className="note-main">
+                    <div className="title note-title">{note.title}</div>
+                    {note.description ? <div className="note-description">{note.description}</div> : null}
+                    <div className="tags note-status">{statusLabel(note)}{note.triagedTo ? ` -> ${note.triagedTo}` : ""}</div>
                   </div>
-                  <div className="tags">{note.status}{note.triagedTo ? ` -> ${note.triagedTo}` : ""}</div>
-                  <div className="meta-row">Created {note.createdAt.slice(0, 10)} | Updated {note.updatedAt.slice(0, 10)}</div>
+                  <div className="note-side">
+                    <button onClick={() => setPopup({ type: "note", id: note.id })}>Manage</button>
+                    <div className="meta-row note-meta-time">
+                      {note.createdAt === note.updatedAt
+                        ? `Created ${formatDateTime(note.createdAt)}`
+                        : `Updated ${formatDateTime(note.updatedAt)}`}
+                    </div>
+                  </div>
                 </article>
               ))}
             </div>
@@ -642,21 +823,33 @@ function App() {
 
         {tab === "tasks" && (
           <section>
-            <h2>Prioritized Tasks</h2>
+            <div className="section-head">
+              <h2>Prioritized Tasks</h2>
+              {renderFilterControl("tasks")}
+            </div>
             <div className="actions">
               <button onClick={() => void addQuickTask()}>+ Task</button>
             </div>
             <div className="cards">
-              {state.tasks.sort((a, b) => a.priority - b.priority).map((task) => (
-                <article key={task.id} className="card">
-                  <div className="card-top">
-                    <div className="title">#{task.priority} {task.title}</div>
+              {filteredTasks.map((task) => (
+                <article key={task.id} className={`card entity-card ${getStatusBucket(task) !== "active" ? "is-dimmed" : ""}`}>
+                  <div className="entity-main">
+                    <div className="title entity-title">{task.title}</div>
+                    <div className="tags entity-summary">
+                      {task.deadline ? `due ${task.deadline} | ` : ""}postponed {task.postponedCount}
+                      {task.goalId ? ` | goal ${state.goals.find((g) => g.id === task.goalId)?.title ?? "Unknown"}` : ""}
+                      {task.projectId ? ` | project ${state.projects.find((p) => p.id === task.projectId)?.title ?? "Unknown"}` : ""}
+                    </div>
+                    <div className="tags entity-status">{statusLabel(task)}</div>
+                  </div>
+                  <div className="entity-side">
                     <button onClick={() => setPopup({ type: "task", id: task.id })}>Manage</button>
+                    <div className="meta-row entity-meta-time">
+                      {task.createdAt === task.updatedAt
+                        ? `Created ${formatDateTime(task.createdAt)}`
+                        : `Updated ${formatDateTime(task.updatedAt)}`}
+                    </div>
                   </div>
-                  <div className="tags">
-                    {task.status} {task.deadline ? `| due ${task.deadline}` : ""} | postponed {task.postponedCount} {task.goalId ? `| goal ${state.goals.find((g) => g.id === task.goalId)?.title ?? "Unknown"}` : ""} {task.projectId ? `| project ${state.projects.find((p) => p.id === task.projectId)?.title ?? "Unknown"}` : ""}
-                  </div>
-                  <div className="meta-row">Created {task.createdAt.slice(0, 10)} | Updated {task.updatedAt.slice(0, 10)}</div>
                 </article>
               ))}
             </div>
@@ -705,145 +898,191 @@ function App() {
           </section>
         )}
 
-        {tab === "routines" && (
+        {tab === "more" && (
           <section>
-            <h2>Routines</h2>
-            <div className="actions">
-              <button onClick={() => void addQuickRoutine()}>+ Routine</button>
-            </div>
-            <div className="cards">
-              {state.routines.sort(byUpdated).map((routine) => (
-                <article key={routine.id} className="card">
-                  <div className="card-top">
-                    <div className="title">{routine.title}</div>
-                    <button onClick={() => setPopup({ type: "routine", id: routine.id })}>Manage</button>
-                  </div>
-                  <div className="tags">{routine.goalId ? `goal ${state.goals.find((g) => g.id === routine.goalId)?.title ?? "Unknown"}` : "No goal linked"}</div>
-                  <div className="meta-row">Created {routine.createdAt.slice(0, 10)} | Updated {routine.updatedAt.slice(0, 10)}</div>
-                </article>
+            <h2>More</h2>
+            <div className="more-tabs">
+              {[
+                ["routines", "Routines"],
+                ["goals", "Goals"],
+                ["review", "Review"],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  className={moreTab === id ? "active" : ""}
+                  onClick={() => setMoreTab(id as MoreTab)}
+                >
+                  {label}
+                </button>
               ))}
             </div>
+            {moreTab === "routines" && (
+              <>
+                <div className="section-subhead">
+                  <h3>Routines</h3>
+                  {renderFilterControl("routines")}
+                </div>
+                <div className="actions">
+                  <button onClick={() => void addQuickRoutine()}>+ Routine</button>
+                </div>
+                <div className="cards">
+                  {filteredRoutines.map((routine) => (
+                    <article key={routine.id} className={`card entity-card ${getStatusBucket(routine) !== "active" ? "is-dimmed" : ""}`}>
+                      <div className="entity-main">
+                        <div className="title entity-title">{routine.title}</div>
+                        <div className="tags entity-summary">
+                          {routine.goalId ? `goal ${state.goals.find((g) => g.id === routine.goalId)?.title ?? "Unknown"}` : "No goal linked"}
+                        </div>
+                        <div className="tags entity-status">{statusLabel(routine)}</div>
+                      </div>
+                      <div className="entity-side">
+                        <button onClick={() => setPopup({ type: "routine", id: routine.id })}>Manage</button>
+                        <div className="meta-row entity-meta-time">
+                          {routine.createdAt === routine.updatedAt
+                            ? `Created ${formatDateTime(routine.createdAt)}`
+                            : `Updated ${formatDateTime(routine.updatedAt)}`}
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {moreTab === "goals" && (
+              <>
+                <div className="section-subhead">
+                  <h3>Goals</h3>
+                  {renderFilterControl("goals")}
+                </div>
+                <div className="actions">
+                  <button onClick={() => void addQuickGoal()}>+ Goal</button>
+                </div>
+                <div className="cards">
+                  {filteredGoals.map((goal) => {
+                    const pMetric = primaryMetric(goal);
+                    const linkedProjects = state.projects.filter((p) => p.goalId === goal.id);
+                    const linkedTasks = state.tasks.filter((t) => t.goalId === goal.id);
+                    const linkedRoutines = state.routines.filter((r) => r.goalId === goal.id);
+                    const progress = pMetric.target > 0 ? Math.min(100, Math.round((pMetric.current / pMetric.target) * 100)) : 0;
+                    return (
+                      <article key={goal.id} className={`card entity-card ${getStatusBucket(goal) !== "active" ? "is-dimmed" : ""}`}>
+                        <div className="entity-main">
+                          <div className="title entity-title">{goal.title}</div>
+                          <div className="tags entity-summary">{pMetric.name}: {pMetric.current}/{pMetric.target} ({progress}%)</div>
+                          <div className="bar"><i style={{ width: `${progress}%` }} /></div>
+                          <div className="tags entity-summary">linked: {linkedProjects.length} projects, {linkedTasks.length} tasks, {linkedRoutines.length} routines</div>
+                          <div className="tags entity-status">{statusLabel(goal)}</div>
+                        </div>
+                        <div className="entity-side">
+                          <button onClick={() => setPopup({ type: "goal", id: goal.id })}>Manage</button>
+                          <div className="meta-row entity-meta-time">
+                            {goal.createdAt === goal.updatedAt
+                              ? `Created ${formatDateTime(goal.createdAt)}`
+                              : `Updated ${formatDateTime(goal.updatedAt)}`}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {moreTab === "review" && (
+              <>
+                <h3>Weekly Review</h3>
+                <form className="checklist" onSubmit={saveWeeklyReview}>
+                  <label><input type="checkbox" name="inboxCleared" /> Inbox cleaned</label>
+                  <label><input type="checkbox" name="tasksPrioritized" /> Tasks prioritized</label>
+                  <label><input type="checkbox" name="weekPlanned" /> Week planned</label>
+                  <label><input type="checkbox" name="goalsChecked" /> Goals reviewed</label>
+                  <textarea name="note" placeholder="What changed this week?" />
+                  <button type="submit">Save Weekly Review</button>
+                </form>
+                <h3>Review History</h3>
+                <div className="cards">
+                  {state.reviews
+                    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                    .map((review) => (
+                      <article key={review.id} className="card">
+                        <div className="title">{review.weekKey}</div>
+                        <div className="tags">
+                          inbox:{String(review.inboxCleared)} | tasks:{String(review.tasksPrioritized)} | plan:{String(review.weekPlanned)}
+                        </div>
+                        <div>{review.note || "No note"}</div>
+                      </article>
+                    ))}
+                </div>
+                <h3>Event Log</h3>
+                <div className="cards">
+                  {state.logs.map((log) => (
+                    <article key={log.id} className="card log">
+                      <div className="title">{log.action}</div>
+                      <div className="tags">{log.at.slice(0, 19).replace("T", " ")} | {log.entityType} {log.entityId ?? ""}</div>
+                      <div>{log.detail}</div>
+                    </article>
+                  ))}
+                </div>
+              </>
+            )}
           </section>
         )}
 
         {tab === "projects" && (
           <section>
-            <h2>Projects</h2>
+            <div className="section-head">
+              <h2>Projects</h2>
+              {renderFilterControl("projects")}
+            </div>
             <div className="actions">
               <button onClick={() => void addQuickProject()}>+ Project</button>
             </div>
             <div className="cards">
-              {state.projects.sort(byUpdated).map((project) => (
-                <article key={project.id} className="card">
-                  <div className="card-top">
-                    <div className="title">{project.title}</div>
-                    <button onClick={() => setPopup({ type: "project", id: project.id })}>Manage</button>
+              {filteredProjects.map((project) => (
+                <article key={project.id} className={`card entity-card ${getStatusBucket(project) !== "active" ? "is-dimmed" : ""}`}>
+                  <div className="entity-main">
+                    <div className="title entity-title">{project.title}</div>
+                    <div className="tags entity-summary">{project.goalId ? `goal ${state.goals.find((g) => g.id === project.goalId)?.title ?? "Unknown"}` : "No goal linked"}</div>
+                    <div className="tags entity-status">{statusLabel(project)}</div>
                   </div>
-                  <div className="tags">{project.isActive ? "active" : "inactive"} | {project.status} {project.goalId ? `| goal ${state.goals.find((g) => g.id === project.goalId)?.title ?? "Unknown"}` : ""}</div>
-                  <div className="meta-row">Created {project.createdAt.slice(0, 10)} | Updated {project.updatedAt.slice(0, 10)}</div>
+                  <div className="entity-side">
+                    <button onClick={() => setPopup({ type: "project", id: project.id })}>Manage</button>
+                    <div className="meta-row entity-meta-time">
+                      {project.createdAt === project.updatedAt
+                        ? `Created ${formatDateTime(project.createdAt)}`
+                        : `Updated ${formatDateTime(project.updatedAt)}`}
+                    </div>
+                  </div>
                 </article>
               ))}
             </div>
           </section>
         )}
 
-        {tab === "goals" && (
-          <section>
-            <h2>Goals</h2>
-            <div className="actions">
-              <button onClick={() => void addQuickGoal()}>+ Goal</button>
-            </div>
-            <div className="cards">
-              {state.goals.sort(byUpdated).map((goal) => {
-                const pMetric = primaryMetric(goal);
-                const linkedProjects = state.projects.filter((p) => p.goalId === goal.id);
-                const linkedTasks = state.tasks.filter((t) => t.goalId === goal.id);
-                const linkedRoutines = state.routines.filter((r) => r.goalId === goal.id);
-                const progress = pMetric.target > 0 ? Math.min(100, Math.round((pMetric.current / pMetric.target) * 100)) : 0;
-                return (
-                  <article key={goal.id} className="card">
-                    <div className="card-top">
-                      <div className="title">{goal.title}</div>
-                      <button onClick={() => setPopup({ type: "goal", id: goal.id })}>Manage</button>
-                    </div>
-                    <div className="tags">{pMetric.name}: {pMetric.current}/{pMetric.target} ({progress}%)</div>
-                    <div className="bar"><i style={{ width: `${progress}%` }} /></div>
-                    <div className="tags">linked: {linkedProjects.length} projects, {linkedTasks.length} tasks, {linkedRoutines.length} routines</div>
-                    <div className="meta-row">Created {goal.createdAt.slice(0, 10)} | Updated {goal.updatedAt.slice(0, 10)}</div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {tab === "review" && (
-          <section>
-            <h2>Weekly Review</h2>
-            <form className="checklist" onSubmit={saveWeeklyReview}>
-              <label><input type="checkbox" name="inboxCleared" /> Inbox cleaned</label>
-              <label><input type="checkbox" name="tasksPrioritized" /> Tasks prioritized</label>
-              <label><input type="checkbox" name="weekPlanned" /> Week planned</label>
-              <label><input type="checkbox" name="goalsChecked" /> Goals reviewed</label>
-              <textarea name="note" placeholder="What changed this week?" />
-              <button type="submit">Save Weekly Review</button>
-            </form>
-            <h3>Review History</h3>
-            <div className="cards">
-              {state.reviews
-                .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-                .map((review) => (
-                  <article key={review.id} className="card">
-                    <div className="title">{review.weekKey}</div>
-                    <div className="tags">
-                      inbox:{String(review.inboxCleared)} | tasks:{String(review.tasksPrioritized)} | plan:{String(review.weekPlanned)}
-                    </div>
-                    <div>{review.note || "No note"}</div>
-                  </article>
-                ))}
-            </div>
-            <h3>Event Log</h3>
-            <div className="cards">
-              {state.logs.map((log) => (
-                <article key={log.id} className="card log">
-                  <div className="title">{log.action}</div>
-                  <div className="tags">{log.at.slice(0, 19).replace("T", " ")} | {log.entityType} {log.entityId ?? ""}</div>
-                  <div>{log.detail}</div>
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {tab === "debug" && (
-          <section>
-            <h2>Debug Date Control</h2>
-            <div className="card">
-              <div className="title">Logical Day: {logicalDay}</div>
-              <div className="actions">
-                <button onClick={() => void setLogicalDay(prevDay(logicalDay))}>-1 Day</button>
-                <button onClick={() => void setLogicalDay(nextDay(logicalDay))}>+1 Day</button>
-                <button onClick={() => void setLogicalDay(toDayString())}>Reset to Today</button>
-                <button
-                  onClick={() => {
-                    const day = window.prompt("Set logical day YYYY-MM-DD", logicalDay);
-                    if (day) void setLogicalDay(day);
-                  }}
-                >
-                  Set Date
-                </button>
-              </div>
-            </div>
-          </section>
-        )}
       </main>
 
+      {tab === "notes" && (
+        <form ref={noteComposerRef} onSubmit={addNote} className="notes-composer">
+          <div className="row">
+            <textarea
+              ref={noteTextareaRef}
+              value={noteInput}
+              onChange={(e) => setNoteInput(e.target.value)}
+              placeholder="Add a note..."
+              rows={1}
+            />
+            <button type="submit">Add</button>
+          </div>
+        </form>
+      )}
+
       {showSettingsPopup && (
-        <div className="modal-backdrop" onClick={() => setShowSettingsPopup(false)}>
+        <div className="modal-backdrop" onClick={closeSettingsPopup}>
           <section className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="card-top">
               <h3>App Settings</h3>
-              <button onClick={() => setShowSettingsPopup(false)}>Close</button>
+              <button onClick={closeSettingsPopup}>Close</button>
             </div>
             <div className="card">
               <div className="title">Application Version</div>
@@ -852,8 +1091,28 @@ function App() {
                 <button onClick={() => void checkForUpdates()} disabled={isCheckingUpdate || isApplyingUpdate}>
                   {isApplyingUpdate ? "Applying update..." : isCheckingUpdate ? "Checking updates..." : "Check for update"}
                 </button>
+                <button onClick={() => setShowDebugTools((prev) => !prev)}>{showDebugTools ? "Hide debug tools" : "Debug tools"}</button>
               </div>
             </div>
+            {showDebugTools && (
+              <div className="card">
+                <div className="title">Debug Date Control</div>
+                <div className="tags">Logical Day: {logicalDay}</div>
+                <div className="actions">
+                  <button onClick={() => void setLogicalDay(prevDay(logicalDay))}>-1 Day</button>
+                  <button onClick={() => void setLogicalDay(nextDay(logicalDay))}>+1 Day</button>
+                  <button onClick={() => void setLogicalDay(toDayString())}>Reset to Today</button>
+                  <button
+                    onClick={() => {
+                      const day = window.prompt("Set logical day YYYY-MM-DD", logicalDay);
+                      if (day) void setLogicalDay(day);
+                    }}
+                  >
+                    Set Date
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       )}
@@ -1033,11 +1292,8 @@ function App() {
           ["notes", "Notes"],
           ["tasks", "Tasks"],
           ["today", "Today"],
-          ["routines", "Routines"],
           ["projects", "Projects"],
-          ["goals", "Goals"],
-          ["review", "Review"],
-          ["debug", "Debug"],
+          ["more", "More"],
         ].map(([id, label]) => (
           <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id as Tab)}>
             {label}
