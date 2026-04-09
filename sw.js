@@ -1,4 +1,4 @@
-const CACHE_NAME = "wow-goals-v4";
+const CACHE_NAME = "wow-goals-v5";
 let networkFirstUntil = 0;
 
 const scopeUrl = new URL(self.registration.scope);
@@ -152,6 +152,5 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  const useNetworkFirst = Date.now() < networkFirstUntil;
-  event.respondWith(useNetworkFirst ? networkFirst(request) : cacheFirst(request));
+  event.respondWith(networkFirst(request));
 });
