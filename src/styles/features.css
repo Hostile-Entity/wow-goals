@@ -213,3 +213,9 @@
 .is-dimmed .meta-row {
   color: color-mix(in srgb, var(--muted) 85%, var(--text));
 }
+
+.cards.search-results {
+  display: flex;
+  flex-direction: column;
+  align-content: flex-start;
+}

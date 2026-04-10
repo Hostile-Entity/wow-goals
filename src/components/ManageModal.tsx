@@ -56,7 +56,7 @@ export function ManageModal({
   close,
 }: ManageModalProps) {
   return (
-    <div className="modal-backdrop" onClick={close}>
+    <div className="modal-backdrop">
       <section className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="card-top">
           <h3>Manage {popupType}</h3>
@@ -104,9 +104,10 @@ export function ManageModal({
               Goal
               <select
                 value={selectedTask.goalId ?? ""}
-                onChange={(e) =>
-                  void updateEntity("task", selectedTask.id, (t: Task) => ({ ...t, goalId: e.target.value || undefined }))
-                }
+                onChange={(e) => {
+                  const goalId = e.currentTarget.value || undefined;
+                  void updateEntity("task", selectedTask.id, (t: Task) => ({ ...t, goalId }));
+                }}
               >
                 <option value="">None</option>
                 {linkableGoals.map((goal) => (
@@ -120,9 +121,10 @@ export function ManageModal({
               Project
               <select
                 value={selectedTask.projectId ?? ""}
-                onChange={(e) =>
-                  void updateEntity("task", selectedTask.id, (t: Task) => ({ ...t, projectId: e.target.value || undefined }))
-                }
+                onChange={(e) => {
+                  const projectId = e.currentTarget.value || undefined;
+                  void updateEntity("task", selectedTask.id, (t: Task) => ({ ...t, projectId }));
+                }}
               >
                 <option value="">None</option>
                 {linkableProjects.map((project) => (
@@ -151,9 +153,10 @@ export function ManageModal({
               Goal
               <select
                 value={selectedRoutine.goalId ?? ""}
-                onChange={(e) =>
-                  void updateEntity("routine", selectedRoutine.id, (r: Routine) => ({ ...r, goalId: e.target.value || undefined }))
-                }
+                onChange={(e) => {
+                  const goalId = e.currentTarget.value || undefined;
+                  void updateEntity("routine", selectedRoutine.id, (r: Routine) => ({ ...r, goalId }));
+                }}
               >
                 <option value="">None</option>
                 {linkableGoals.map((goal) => (
@@ -187,9 +190,10 @@ export function ManageModal({
               Goal
               <select
                 value={selectedProject.goalId ?? ""}
-                onChange={(e) =>
-                  void updateEntity("project", selectedProject.id, (p: Project) => ({ ...p, goalId: e.target.value || undefined }))
-                }
+                onChange={(e) => {
+                  const goalId = e.currentTarget.value || undefined;
+                  void updateEntity("project", selectedProject.id, (p: Project) => ({ ...p, goalId }));
+                }}
               >
                 <option value="">None</option>
                 {linkableGoals.map((goal) => (

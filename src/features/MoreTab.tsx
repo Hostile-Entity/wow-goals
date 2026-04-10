@@ -14,8 +14,8 @@ interface MoreTabProps {
   reviews: AppData["state"]["reviews"];
   logs: AppData["state"]["logs"];
   statusLabel: AppData["statusLabel"];
-  addQuickRoutine: AppData["addQuickRoutine"];
-  addQuickGoal: AppData["addQuickGoal"];
+  onCreateRoutine(): void;
+  onCreateGoal(): void;
   primaryMetric: AppData["primaryMetric"];
   saveWeeklyReview(form: FormData): Promise<void>;
   renderFilterControl(key: FilterKey): ReactNode;
@@ -36,8 +36,8 @@ export function MoreTab({
   reviews,
   logs,
   statusLabel,
-  addQuickRoutine,
-  addQuickGoal,
+  onCreateRoutine,
+  onCreateGoal,
   primaryMetric,
   saveWeeklyReview,
   renderFilterControl,
@@ -73,11 +73,15 @@ export function MoreTab({
             {renderFilterControl("routines")}
           </div>
           <div className="actions">
-            <button onClick={() => void addQuickRoutine()}>+ Routine</button>
+            <button onClick={onCreateRoutine}>+ Routine</button>
           </div>
           <div className="cards">
             {filteredRoutines.map((routine) => (
-              <article key={routine.id} className={`card entity-card ${getStatusBucket(routine) !== "active" ? "is-dimmed" : ""}`}>
+              <article
+                key={routine.id}
+                id={`item-routine-${routine.id}`}
+                className={`card entity-card ${getStatusBucket(routine) !== "active" ? "is-dimmed" : ""}`}
+              >
                 <div className="entity-main">
                   <div className="title entity-title">{routine.title}</div>
                   <div className="tags entity-summary">
@@ -106,7 +110,7 @@ export function MoreTab({
             {renderFilterControl("goals")}
           </div>
           <div className="actions">
-            <button onClick={() => void addQuickGoal()}>+ Goal</button>
+            <button onClick={onCreateGoal}>+ Goal</button>
           </div>
           <div className="cards">
             {filteredGoals.map((goal) => {
@@ -116,7 +120,11 @@ export function MoreTab({
               const linkedRoutines = routines.filter((r) => r.goalId === goal.id);
               const progress = pMetric.target > 0 ? Math.min(100, Math.round((pMetric.current / pMetric.target) * 100)) : 0;
               return (
-                <article key={goal.id} className={`card entity-card ${getStatusBucket(goal) !== "active" ? "is-dimmed" : ""}`}>
+                <article
+                  key={goal.id}
+                  id={`item-goal-${goal.id}`}
+                  className={`card entity-card ${getStatusBucket(goal) !== "active" ? "is-dimmed" : ""}`}
+                >
                   <div className="entity-main">
                     <div className="title entity-title">{goal.title}</div>
                     <div className="tags entity-summary">

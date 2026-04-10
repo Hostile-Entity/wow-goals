@@ -12,7 +12,11 @@ export function NotesTab({ filteredNotes, statusLabel, onManage, formatDateTime 
   return (
     <div className="cards">
       {filteredNotes.map((note) => (
-        <article key={note.id} className={`card note-card ${getStatusBucket(note) !== "active" ? "is-dimmed" : ""}`}>
+        <article
+          key={note.id}
+          id={`item-note-${note.id}`}
+          className={`card note-card ${getStatusBucket(note) !== "active" ? "is-dimmed" : ""}`}
+        >
           <div className="note-main">
             <div className="title note-title">{note.title}</div>
             {note.description ? <div className="note-description">{note.description}</div> : null}
