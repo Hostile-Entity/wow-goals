@@ -1,0 +1,86 @@
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--bg) 75%, transparent);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.meta {
+  color: var(--accent-2);
+  font-size: 0.82rem;
+}
+
+.settings-btn {
+  padding: 4px 8px;
+  font-size: 0.72rem;
+}
+
+.filter-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.filter-btn {
+  font-size: 0.68rem;
+  padding: 4px 7px;
+}
+
+.filter-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  display: grid;
+  gap: 4px;
+  min-width: 112px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+  z-index: 9;
+}
+
+.filter-menu button {
+  text-align: left;
+  font-size: 0.72rem;
+  padding: 5px 7px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 6, 9, 0.78);
+  display: grid;
+  place-items: center;
+  z-index: 20;
+  padding: 14px;
+}
+
+.modal {
+  width: min(520px, 100%);
+  max-height: 85vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.more-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
