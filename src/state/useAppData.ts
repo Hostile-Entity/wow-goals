@@ -20,6 +20,36 @@ export type StatusFilter = "all" | "active" | "inactive" | "completed" | "discar
 export type FilterKey = "notes" | "tasks" | "projects" | "routines" | "goals";
 export type StatusBucket = Exclude<StatusFilter, "all">;
 export type SortableEntity = { status: "active" | "completed" | "discarded"; updatedAt: string; isActive?: boolean };
+export type TaskDraft = {
+  title: string;
+  description?: string;
+  deadline?: string;
+  priority?: number;
+  goalId?: string;
+  projectId?: string;
+};
+export type ProjectDraft = {
+  title: string;
+  description?: string;
+  deadline?: string;
+  goalId?: string;
+  importance?: number;
+  effort?: number;
+  isActive?: boolean;
+};
+export type GoalDraft = {
+  title: string;
+  description?: string;
+  isActive?: boolean;
+  metricName?: string;
+  metricCurrent?: number;
+  metricTarget?: number;
+};
+export type RoutineDraft = {
+  title: string;
+  description?: string;
+  goalId?: string;
+};
 
 const emptySettings: AppSettings = { id: "settings", logicalDate: toDayString() };
 
@@ -620,43 +650,72 @@ export function useAppData() {
   async function addQuickTask(): Promise<void> {
     const title = window.prompt("Task title", "");
     if (!title?.trim()) return;
+    await createTask({ title: title.trim() });
+  }
+
+  async function createTask(draft: TaskDraft): Promise<void> {
+    const title = draft.title.trim();
+    if (!title) return;
     const task: Task = {
-      ...makeBase(title.trim()),
-      priority: state.tasks.length + 1,
+      ...makeBase(title),
+      description: draft.description?.trim() ?? "",
+      priority: draft.priority ?? state.tasks.length + 1,
       postponedCount: 0,
+      deadline: draft.deadline || undefined,
+      goalId: draft.goalId || undefined,
+      projectId: draft.projectId || undefined,
     };
     await putItem("tasks", task);
-    await logEvent("create", "task", task.id, "Quick added task");
+    await logEvent("create", "task", task.id, "Added task");
     await reloadAll();
   }
 
   async function addQuickProject(): Promise<void> {
     const title = window.prompt("Project title", "");
     if (!title?.trim()) return;
+    await createProject({ title: title.trim() });
+  }
+
+  async function createProject(draft: ProjectDraft): Promise<void> {
+    const title = draft.title.trim();
+    if (!title) return;
     const project: Project = {
-      ...makeBase(title.trim()),
-      isActive: true,
-      effort: 3,
-      importance: 3,
+      ...makeBase(title),
+      description: draft.description?.trim() ?? "",
+      isActive: draft.isActive ?? true,
+      effort: draft.effort ?? 3,
+      importance: draft.importance ?? 3,
+      deadline: draft.deadline || undefined,
+      goalId: draft.goalId || undefined,
     };
     await putItem("projects", project);
-    await logEvent("create", "project", project.id, "Quick added project");
+    await logEvent("create", "project", project.id, "Added project");
     await reloadAll();
   }
 
   async function addQuickGoal(): Promise<void> {
     const title = window.prompt("Goal title", "");
     if (!title?.trim()) return;
+    await createGoal({ title: title.trim() });
+  }
+
+  async function createGoal(draft: GoalDraft): Promise<void> {
+    const title = draft.title.trim();
+    if (!title) return;
+    const metricName = draft.metricName?.trim() || "Progress";
+    const metricCurrent = draft.metricCurrent ?? 0;
+    const metricTarget = draft.metricTarget ?? 10;
     const goal: Goal = {
-      ...makeBase(title.trim()),
-      isActive: true,
-      metricName: "Progress",
-      metricCurrent: 0,
-      metricTarget: 10,
-      metrics: [{ id: uid("metric"), name: "Progress", current: 0, target: 10 }],
+      ...makeBase(title),
+      description: draft.description?.trim() ?? "",
+      isActive: draft.isActive ?? true,
+      metricName,
+      metricCurrent,
+      metricTarget,
+      metrics: [{ id: uid("metric"), name: metricName, current: metricCurrent, target: metricTarget }],
     };
     await putItem("goals", goal);
-    await logEvent("create", "goal", goal.id, "Quick added goal");
+    await logEvent("create", "goal", goal.id, "Added goal");
     await reloadAll();
   }
 
@@ -696,12 +755,20 @@ export function useAppData() {
   async function addQuickRoutine(): Promise<void> {
     const title = window.prompt("Routine title", "");
     if (!title?.trim()) return;
+    await createRoutine({ title: title.trim() });
+  }
+
+  async function createRoutine(draft: RoutineDraft): Promise<void> {
+    const title = draft.title.trim();
+    if (!title) return;
     const routine: Routine = {
-      ...makeBase(title.trim()),
+      ...makeBase(title),
+      description: draft.description?.trim() ?? "",
       cadence: "daily",
+      goalId: draft.goalId || undefined,
     };
     await putItem("routines", routine);
-    await logEvent("create", "routine", routine.id, "Quick added routine");
+    await logEvent("create", "routine", routine.id, "Added routine");
     await reloadAll();
   }
 
@@ -826,13 +893,17 @@ export function useAppData() {
     editTitle,
     editDescription,
     addQuickTask,
+    createTask,
     addQuickProject,
+    createProject,
     addQuickGoal,
+    createGoal,
     addGoalMetric,
     editGoalMetric,
     removeGoalMetric,
     setPrimaryGoalMetric,
     addQuickRoutine,
+    createRoutine,
     saveWeeklyReview,
     goalMetrics,
     primaryMetric,

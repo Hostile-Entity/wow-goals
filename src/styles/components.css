@@ -7,7 +7,7 @@
   border-bottom: 1px solid var(--line);
   padding: 10px 12px;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
 }
 
@@ -25,6 +25,62 @@
 .settings-btn {
   padding: 4px 8px;
   font-size: 0.72rem;
+}
+
+.search-topbar {
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.search-back-btn {
+  flex-shrink: 0;
+}
+
+.search-topbar input {
+  min-height: 34px;
+}
+
+.search-main {
+  padding-top: 6px;
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.search-result-card {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+}
+
+.search-result-type {
+  font-size: 0.68rem;
+  margin-bottom: 0;
+}
+
+.search-result-title {
+  font-size: 0.9rem;
+  line-height: 1.25;
+  margin-bottom: 0;
+}
+
+.search-result-description {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+mark {
+  background: color-mix(in srgb, var(--accent-2) 78%, #000);
+  color: #111;
+  border-radius: 4px;
+  padding: 0 2px;
 }
 
 .filter-wrap {

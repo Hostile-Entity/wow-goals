@@ -14,7 +14,11 @@ export function TasksTab({ filteredTasks, goals, projects, statusLabel, onManage
   return (
     <div className="cards">
       {filteredTasks.map((task) => (
-        <article key={task.id} className={`card entity-card ${getStatusBucket(task) !== "active" ? "is-dimmed" : ""}`}>
+        <article
+          key={task.id}
+          id={`item-task-${task.id}`}
+          className={`card entity-card ${getStatusBucket(task) !== "active" ? "is-dimmed" : ""}`}
+        >
           <div className="entity-main">
             <div className="title entity-title">{task.title}</div>
             <div className="tags entity-summary">
