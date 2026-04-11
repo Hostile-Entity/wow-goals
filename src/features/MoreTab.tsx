@@ -64,6 +64,31 @@ export function MoreTab({
 }: MoreTabProps) {
   const [chartsGoalId, setChartsGoalId] = useState<string | null>(null);
   const chartsGoal = useMemo(() => goals.find((goal) => goal.id === chartsGoalId), [goals, chartsGoalId]);
+  const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal.title])), [goals]);
+  const linkedProjectCountByGoal = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const project of projects) {
+      if (!project.goalId) continue;
+      map.set(project.goalId, (map.get(project.goalId) ?? 0) + 1);
+    }
+    return map;
+  }, [projects]);
+  const linkedTaskCountByGoal = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const task of tasks) {
+      if (!task.goalId) continue;
+      map.set(task.goalId, (map.get(task.goalId) ?? 0) + 1);
+    }
+    return map;
+  }, [tasks]);
+  const linkedRoutineCountByGoal = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const routine of routines) {
+      if (!routine.goalId) continue;
+      map.set(routine.goalId, (map.get(routine.goalId) ?? 0) + 1);
+    }
+    return map;
+  }, [routines]);
 
   return (
     <section>
@@ -94,7 +119,7 @@ export function MoreTab({
                   <div className="entity-main">
                     <div className="title entity-title">{routine.title}</div>
                     <div className="tags entity-summary">
-                      {routine.goalId ? `goal ${goals.find((g) => g.id === routine.goalId)?.title ?? "Unknown"}` : "No goal linked"}
+                      {routine.goalId ? `goal ${goalById.get(routine.goalId) ?? "Unknown"}` : "No goal linked"}
                     </div>
                     <div className="tags entity-status">{statusLabel(routine)}</div>
                   </div>
@@ -132,9 +157,6 @@ export function MoreTab({
                 if (b.id === primaryId) return 1;
                 return 0;
               });
-              const linkedProjects = projects.filter((p) => p.goalId === goal.id);
-              const linkedTasks = tasks.filter((t) => t.goalId === goal.id);
-              const linkedRoutines = routines.filter((r) => r.goalId === goal.id);
               const bucket = getStatusBucket(goal);
               const cardToneClass = bucket === "in_progress" ? "is-in-progress" : bucket !== "active" ? "is-dimmed" : "";
               return (
@@ -157,7 +179,7 @@ export function MoreTab({
                       })}
                     </div>
                     <div className="tags entity-summary">
-                      linked: {linkedProjects.length} projects, {linkedTasks.length} tasks, {linkedRoutines.length} routines
+                      linked: {linkedProjectCountByGoal.get(goal.id) ?? 0} projects, {linkedTaskCountByGoal.get(goal.id) ?? 0} tasks, {linkedRoutineCountByGoal.get(goal.id) ?? 0} routines
                     </div>
                     <div className="tags entity-status">{statusLabel(goal)}</div>
                   </div>

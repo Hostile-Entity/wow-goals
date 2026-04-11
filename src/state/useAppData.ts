@@ -1075,6 +1075,10 @@ export function useAppData() {
   const filteredGoals = useMemo(() => sortAndFilterItems(state.goals, filters.goals), [state.goals, filters.goals]);
   const linkableGoals = useMemo(() => state.goals.filter((g) => g.status !== "discarded"), [state.goals]);
   const linkableProjects = useMemo(() => state.projects.filter((p) => p.status !== "discarded"), [state.projects]);
+  const activeNoteCount = useMemo(
+    () => state.notes.filter((note) => note.status === "active" || note.status === "in_progress").length,
+    [state.notes],
+  );
   const completedTodayCount = state.completions.filter((c) => toDayString(c.completedAt, dayStartHour) === logicalDay && c.entityType === "task").length;
   const routinesTodayCount = state.completions.filter((c) => toDayString(c.completedAt, dayStartHour) === logicalDay && c.entityType === "routine").length;
 
@@ -1117,6 +1121,7 @@ export function useAppData() {
     filteredGoals,
     linkableGoals,
     linkableProjects,
+    activeNoteCount,
     completedTodayCount,
     routinesTodayCount,
     checkForUpdates,

@@ -78,6 +78,7 @@ function App() {
   const [editor, setEditor] = useState<EditorTarget>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [scrollTargetId, setScrollTargetId] = useState<string | null>(null);
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [isLogView, setIsLogView] = useState(() => typeof window !== "undefined" && window.location.hash === "#/logs");
@@ -91,7 +92,7 @@ function App() {
   const selectedRoutine =
     editor?.type === "routine" && editor.id ? app.state.routines.find((r) => r.id === editor.id) : undefined;
   const selectedGoal = editor?.type === "goal" && editor.id ? app.state.goals.find((g) => g.id === editor.id) : undefined;
-  const searchResults = useMemo(() => buildSearchResults(app, searchQuery), [app, searchQuery]);
+  const searchResults = useMemo(() => buildSearchResults(app, debouncedSearchQuery), [app, debouncedSearchQuery]);
 
   useEffect(() => {
     const handleHashChange = () => setIsLogView(window.location.hash === "#/logs");
@@ -109,6 +110,17 @@ function App() {
 
     return () => window.clearTimeout(timer);
   }, [isSearchMode]);
+
+  useEffect(() => {
+    if (!isSearchMode) {
+      setDebouncedSearchQuery("");
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [isSearchMode, searchQuery]);
 
   useEffect(() => {
     if (!scrollTargetId || isSearchMode) return;
@@ -352,6 +364,7 @@ function App() {
                   filteredNotes={app.filteredNotes}
                   statusLabel={app.statusLabel}
                   formatDateTime={formatDateTime}
+                  ensureVisibleItemId={scrollTargetId}
                   onManage={(note) => setEditor({ mode: "edit", type: "note", id: note.id })}
                 />
               </section>
@@ -378,7 +391,7 @@ function App() {
               <TodayTab
                 completedTodayCount={app.completedTodayCount}
                 routinesTodayCount={app.routinesTodayCount}
-                activeNoteCount={app.state.notes.filter((n) => n.status === "active" || n.status === "in_progress").length}
+                activeNoteCount={app.activeNoteCount}
                 todayTop3={app.todayTop3}
                 routines={app.state.routines}
                 completions={app.state.completions}
