@@ -1,4 +1,4 @@
-const CACHE_NAME = "wow-goals-v25";
+const CACHE_NAME = "wow-goals-v26";
 
 const scopeUrl = new URL(self.registration.scope);
 const BASE_PATH = scopeUrl.pathname;
