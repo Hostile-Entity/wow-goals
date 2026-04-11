@@ -3,8 +3,9 @@
   top: 0;
   z-index: 5;
   backdrop-filter: blur(10px);
-  background: color-mix(in srgb, var(--bg) 75%, transparent);
-  border-bottom: 1px solid var(--line);
+  background: radial-gradient(circle at top, rgba(108, 150, 214, 0.28) 0, transparent 60%), linear-gradient(180deg, #151b26 0, #090d13 100%);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.9);
+  box-shadow: 0 0 0 1px rgba(200, 155, 60, 0.35), 0 0 18px rgba(0, 0, 0, 0.9);
   padding: 7px 12px;
   display: flex;
   align-items: center;
@@ -18,8 +19,9 @@
 }
 
 .meta {
-  color: var(--accent-2);
-  font-size: 0.82rem;
+  color: var(--wow-gold);
+  font-size: 0.8rem;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.85);
 }
 
 .settings-btn {
@@ -77,8 +79,8 @@
 }
 
 mark {
-  background: color-mix(in srgb, var(--accent-2) 78%, #000);
-  color: #111;
+  background: color-mix(in srgb, var(--wow-gold) 78%, #000);
+  color: #1b1206;
   border-radius: 4px;
   padding: 0 2px;
 }
@@ -101,9 +103,10 @@ mark {
   gap: 4px;
   min-width: 112px;
   padding: 6px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--wow-border-soft);
   border-radius: 9px;
-  background: var(--panel);
+  background: linear-gradient(180deg, #171d2a 0%, #0a0f17 100%);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.85);
   z-index: 9;
 }
 
@@ -116,7 +119,7 @@ mark {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(3, 6, 9, 0.78);
+  background: rgba(3, 6, 9, 0.86);
   display: grid;
   place-items: center;
   z-index: 20;
@@ -127,9 +130,10 @@ mark {
   width: min(520px, 100%);
   max-height: 85vh;
   overflow: auto;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(0, 0, 0, 0.9);
   border-radius: 12px;
-  background: var(--panel);
+  background: radial-gradient(circle at top, rgba(47, 66, 99, 0.35) 0, transparent 70%), linear-gradient(180deg, var(--wow-panel) 0%, var(--wow-panel-inner) 100%);
+  box-shadow: 0 0 0 1px rgba(200, 155, 60, 0.2), 0 0 12px rgba(0, 0, 0, 0.9) inset, var(--wow-shadow-strong);
   padding: 10px;
   display: grid;
   gap: 10px;
@@ -140,4 +144,20 @@ mark {
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   margin-top: 6px;
+}
+
+.settings-volume-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-volume-slider {
+  flex: 1;
+  width: 100%;
+}
+
+.settings-volume-value {
+  min-width: 56px;
+  text-align: right;
 }

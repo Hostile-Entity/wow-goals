@@ -462,7 +462,7 @@ function App() {
               placeholder="Add a note..."
               rows={1}
             />
-            <button type="button" onPointerDown={handleAddNotePointerDown} disabled={isAddingNote}>
+            <button className="button-primary add-note-btn" type="button" onPointerDown={handleAddNotePointerDown} disabled={isAddingNote}>
               {isAddingNote ? "Adding..." : "Add"}
             </button>
           </div>
@@ -477,6 +477,7 @@ function App() {
           logicalDay={app.logicalDay}
           logicalOffset={app.logicalOffset}
           dayStartHour={app.dayStartHour}
+          soundVolume={app.soundVolume}
           isCheckingUpdate={app.isCheckingUpdate}
           isApplyingUpdate={app.isApplyingUpdate}
           closeSettingsPopup={app.closeSettingsPopup}
@@ -489,6 +490,7 @@ function App() {
           resetLogicalDayToToday={app.resetLogicalDayToToday}
           setLogicalDay={app.setLogicalDay}
           setDayStartHour={app.setDayStartHour}
+          setSoundVolume={app.setSoundVolume}
           openCompleteLog={handleOpenCompleteLog}
         />
       )}

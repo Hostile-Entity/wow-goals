@@ -35,7 +35,9 @@ const NoteCard = memo(function NoteCard({ note, statusLabel, onManage, formatDat
         </div>
       </div>
       <div className="note-side">
-        <button onClick={() => onManage(note)}>Manage</button>
+        <button className="manage-btn" onClick={() => onManage(note)}>
+          Manage
+        </button>
         <div className="meta-row note-meta-time">
           {note.createdAt === note.updatedAt
             ? `Created ${formatDateTime(note.createdAt)}`

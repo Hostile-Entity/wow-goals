@@ -84,6 +84,7 @@ export interface AppSettings {
   id: "settings";
   dayOffset: number;
   dayStartHour: number;
+  soundVolume: number;
 }
 
 export interface AppStateData {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { clearStore, deleteItem, getAll, getById, putItem, toDayString, uid } from "../db";
+import { playTabClickSound, playUiClickSound, primeAudio, setSfxMasterVolume01 } from "../audio/soundManager";
 import {
   AppSettings,
   AppStateData,
@@ -49,7 +50,13 @@ export type RoutineDraft = {
 };
 
 const DEFAULT_DAY_START_HOUR = 5;
-const emptySettings: AppSettings = { id: "settings", dayOffset: 0, dayStartHour: DEFAULT_DAY_START_HOUR };
+const DEFAULT_SOUND_VOLUME = 0;
+const emptySettings: AppSettings = {
+  id: "settings",
+  dayOffset: 0,
+  dayStartHour: DEFAULT_DAY_START_HOUR,
+  soundVolume: DEFAULT_SOUND_VOLUME,
+};
 const dataStores = ["notes", "tasks", "projects", "goals", "routines", "completions", "reviews", "logs"] as const;
 
 type BackupPayload = {
@@ -129,16 +136,25 @@ function toLogicalDay(offset: number, nowMs: number, dayStartHour: number): stri
 
 function normalizeSettings(raw: unknown): AppSettings {
   if (raw && typeof raw === "object" && "id" in raw && (raw as { id?: string }).id === "settings") {
-    const row = raw as { dayOffset?: unknown; logicalDate?: unknown; dayStartHour?: unknown };
+    const row = raw as { dayOffset?: unknown; logicalDate?: unknown; dayStartHour?: unknown; soundVolume?: unknown };
     const parsedDayStartHour =
       typeof row.dayStartHour === "number" && Number.isFinite(row.dayStartHour)
         ? Math.max(0, Math.min(23, Math.trunc(row.dayStartHour)))
         : DEFAULT_DAY_START_HOUR;
+    const parsedSoundVolume =
+      typeof row.soundVolume === "number" && Number.isFinite(row.soundVolume)
+        ? Math.max(0, Math.min(100, Math.trunc(row.soundVolume)))
+        : DEFAULT_SOUND_VOLUME;
     if (typeof row.dayOffset === "number" && Number.isFinite(row.dayOffset)) {
-      return { id: "settings", dayOffset: Math.trunc(row.dayOffset), dayStartHour: parsedDayStartHour };
+      return { id: "settings", dayOffset: Math.trunc(row.dayOffset), dayStartHour: parsedDayStartHour, soundVolume: parsedSoundVolume };
     }
     if (typeof row.logicalDate === "string") {
-      return { id: "settings", dayOffset: dayDiff(toDayString(undefined, parsedDayStartHour), row.logicalDate), dayStartHour: parsedDayStartHour };
+      return {
+        id: "settings",
+        dayOffset: dayDiff(toDayString(undefined, parsedDayStartHour), row.logicalDate),
+        dayStartHour: parsedDayStartHour,
+        soundVolume: parsedSoundVolume,
+      };
     }
   }
   return emptySettings;
@@ -180,6 +196,7 @@ export function useAppData() {
 
   const logicalOffset = state.settings.dayOffset;
   const dayStartHour = state.settings.dayStartHour;
+  const soundVolume = state.settings.soundVolume;
   const logicalDay = toLogicalDay(logicalOffset, clockNowMs, dayStartHour);
 
   async function reloadAll(): Promise<void> {
@@ -360,6 +377,55 @@ export function useAppData() {
 
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    function primeOnGesture() {
+      document.removeEventListener("pointerdown", primeOnGesture, true);
+      document.removeEventListener("keydown", primeOnGesture, true);
+      void primeAudio();
+    }
+
+    document.addEventListener("pointerdown", primeOnGesture, true);
+    document.addEventListener("keydown", primeOnGesture, true);
+    return () => {
+      document.removeEventListener("pointerdown", primeOnGesture, true);
+      document.removeEventListener("keydown", primeOnGesture, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    setSfxMasterVolume01((soundVolume ?? 0) / 100);
+  }, [soundVolume]);
+
+  useEffect(() => {
+    function handleClick(ev: MouseEvent): void {
+      const target = ev.target as HTMLElement | null;
+      if (!target) return;
+
+      const clickable = target.closest<HTMLElement>("button, [role='button'], a, [data-click-sound]");
+      if (!clickable) return;
+      if (clickable instanceof HTMLButtonElement && clickable.disabled) return;
+
+      const clickSound = clickable.dataset.clickSound;
+      const isMainButton =
+        clickSound === "main" ||
+        clickable.classList.contains("tabs-main-btn") ||
+        clickable.classList.contains("tabs-bar-button") ||
+        clickable.closest(".tabs") !== null ||
+        clickable.closest(".more-tabs") !== null;
+
+      if (isMainButton) {
+        playTabClickSound();
+      } else {
+        playUiClickSound();
+      }
+    }
+
+    document.addEventListener("click", handleClick, true);
+    return () => {
+      document.removeEventListener("click", handleClick, true);
     };
   }, []);
 
@@ -941,36 +1007,42 @@ export function useAppData() {
 
   async function setLogicalDay(day: string): Promise<void> {
     const offset = dayDiff(toDayString(undefined, dayStartHour), day);
-    await putItem("settings", { id: "settings", dayOffset: offset, dayStartHour });
+    await putItem("settings", { id: "settings", dayOffset: offset, dayStartHour, soundVolume });
     await logEvent("debug-date", "settings", "settings", `Logical day offset set to ${offset} (${day})`);
     await reloadAll();
   }
 
   async function decrementLogicalDay(): Promise<void> {
     const nextOffset = logicalOffset - 1;
-    await putItem("settings", { id: "settings", dayOffset: nextOffset, dayStartHour });
+    await putItem("settings", { id: "settings", dayOffset: nextOffset, dayStartHour, soundVolume });
     await logEvent("debug-date", "settings", "settings", `Logical day offset changed to ${nextOffset}`);
     await reloadAll();
   }
 
   async function incrementLogicalDay(): Promise<void> {
     const nextOffset = logicalOffset + 1;
-    await putItem("settings", { id: "settings", dayOffset: nextOffset, dayStartHour });
+    await putItem("settings", { id: "settings", dayOffset: nextOffset, dayStartHour, soundVolume });
     await logEvent("debug-date", "settings", "settings", `Logical day offset changed to ${nextOffset}`);
     await reloadAll();
   }
 
   async function resetLogicalDayToToday(): Promise<void> {
-    await putItem("settings", { id: "settings", dayOffset: 0, dayStartHour });
+    await putItem("settings", { id: "settings", dayOffset: 0, dayStartHour, soundVolume });
     await logEvent("debug-date", "settings", "settings", "Logical day offset reset to 0");
     await reloadAll();
   }
 
   async function setDayStartHour(nextHour: number): Promise<void> {
     const hour = Math.max(0, Math.min(23, Math.trunc(nextHour)));
-    await putItem("settings", { id: "settings", dayOffset: logicalOffset, dayStartHour: hour });
+    await putItem("settings", { id: "settings", dayOffset: logicalOffset, dayStartHour: hour, soundVolume });
     await logEvent("settings", "settings", "settings", `Day starts at ${hour}:00`);
     await reloadAll();
+  }
+
+  async function setSoundVolume(nextVolume: number): Promise<void> {
+    const volume = Math.max(0, Math.min(100, Math.trunc(nextVolume)));
+    await putItem("settings", { id: "settings", dayOffset: logicalOffset, dayStartHour, soundVolume: volume });
+    setState((prev) => ({ ...prev, settings: { ...prev.settings, soundVolume: volume } }));
   }
 
   async function exportData(): Promise<void> {
@@ -1111,6 +1183,7 @@ export function useAppData() {
     noteComposerRef,
     logicalOffset,
     dayStartHour,
+    soundVolume,
     logicalDay,
     activeTasks,
     todayTop3,
@@ -1131,6 +1204,7 @@ export function useAppData() {
     closeSettingsPopup,
     setLogicalDay,
     setDayStartHour,
+    setSoundVolume,
     decrementLogicalDay,
     incrementLogicalDay,
     resetLogicalDayToToday,

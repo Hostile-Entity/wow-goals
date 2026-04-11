@@ -13,6 +13,21 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
+  padding: 3px;
+  border-radius: 14px;
+  position: relative;
+  background: radial-gradient(circle at top, rgba(72, 115, 164, 0.35) 0, transparent 60%), linear-gradient(#05060a, #05060a);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.9), 0 0 40px rgba(0, 0, 0, 0.95);
+  border: 2px solid rgba(15, 21, 33, 0.8);
+}
+
+.app::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 10px;
+  border: 1px solid rgba(131, 182, 230, 0.42);
+  pointer-events: none;
 }
 
 .main {
@@ -54,15 +69,15 @@
   padding: 4px 12px;
   margin: 0 -12px 8px;
   border: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--wow-border-soft) 75%, transparent);
   border-radius: 0;
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--bg) 95%, transparent) 0%,
-    color-mix(in srgb, var(--bg) 86%, transparent) 100%
+    color-mix(in srgb, var(--wow-bg-mid) 94%, transparent) 0%,
+    color-mix(in srgb, #04070d 88%, transparent) 100%
   );
   backdrop-filter: blur(8px);
-  box-shadow: 0 8px 14px rgba(3, 8, 12, 0.25);
+  box-shadow: 0 8px 14px rgba(3, 8, 12, 0.42);
 }
 
 .sticky-head > h2,
@@ -73,8 +88,7 @@
 }
 
 .sticky-head > button {
-  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
-  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
+  border-color: color-mix(in srgb, var(--wow-border) 40%, var(--wow-border-soft));
 }
 
 .section-head .filter-wrap,
@@ -122,15 +136,42 @@ h3 {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 2px;
-  background: #0a1118;
-  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, #121623 0, #05060a 100%);
+  border-top: 1px solid rgba(0, 0, 0, 0.9);
   padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
   z-index: 11;
 }
 
 .tabs button {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-right: 1px solid rgba(0, 0, 0, 0.7);
+  border-radius: 0;
+  box-shadow: none;
   padding: 10px 2px;
+}
+
+.tabs button:last-child {
+  border-right: none;
+}
+
+.tabs button:last-child.active {
+  border-right: none;
+}
+
+.tabs button.active {
+  color: var(--wow-gold);
+  font-weight: 700;
+  background:
+    radial-gradient(circle at top, rgba(89, 132, 192, 0.4) 0, transparent 60%),
+    linear-gradient(180deg, #1a2233 0, #070910 100%);
+  border-right: 1px solid rgba(0, 0, 0, 0.7);
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.7), 0 0 8px rgba(93, 151, 255, 0.55);
+  border-bottom: 2px solid var(--wow-gold);
 }
 
 .notes-composer {
@@ -138,10 +179,10 @@ h3 {
   left: 50%;
   transform: translateX(-50%);
   width: min(760px, 100%);
-  padding: 8px 12px;
+  padding: 6px 10px;
   bottom: calc(var(--tabs-height) + env(safe-area-inset-bottom));
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
-  border-top: 1px solid var(--line);
+  background: linear-gradient(180deg, #111826 0%, #090d14 100%);
+  border-top: 1px solid color-mix(in srgb, var(--wow-border-soft) 70%, #111);
   z-index: 12;
 }
 

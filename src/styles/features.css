@@ -10,18 +10,29 @@
 }
 
 .stat {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 8px;
-  font-size: 0.78rem;
-  color: var(--muted);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  column-gap: 6px;
+  background: linear-gradient(180deg, rgba(19, 28, 42, 0.96) 0%, rgba(10, 14, 22, 0.98) 100%);
+  border: 1px solid color-mix(in srgb, var(--wow-border-soft) 55%, #1c2433);
+  border-radius: 7px;
+  box-shadow: inset 0 1px 0 rgba(135, 167, 216, 0.08);
+  padding: 6px 9px;
 }
 
-.stat span {
-  color: var(--accent-2);
+.stat-value {
+  color: var(--wow-gold);
   font-weight: 700;
-  margin-right: 5px;
+  font-size: 0.92rem;
+  line-height: 1;
+}
+
+.stat-label {
+  color: var(--wow-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .cards {
@@ -30,9 +41,10 @@
 }
 
 .card {
-  border: 1px solid var(--line);
+  border: 1px solid rgba(0, 0, 0, 0.82);
   border-radius: var(--radius);
-  background: var(--panel);
+  background: radial-gradient(circle at top, rgba(47, 66, 99, 0.25) 0, transparent 70%), linear-gradient(180deg, var(--wow-panel) 0%, var(--wow-panel-inner) 100%);
+  box-shadow: 0 0 0 1px rgba(200, 155, 60, 0.18), 0 0 12px rgba(0, 0, 0, 0.85) inset, var(--wow-shadow-strong);
   padding: 6px;
   animation: fade-in 180ms ease both;
 }
@@ -46,6 +58,8 @@
 
 .title {
   font-weight: 600;
+  color: var(--text);
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
   margin-bottom: 5px;
 }
 
@@ -88,16 +102,58 @@
 }
 
 .task-hero {
-  border-color: color-mix(in srgb, var(--accent-2) 35%, var(--line));
+  border-color: color-mix(in srgb, var(--wow-gold) 48%, #3a2a12);
+}
+
+.today-top3-list {
+  display: grid;
+  gap: 8px;
+}
+
+.today-task-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.today-task-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.today-task-title {
+  margin-bottom: 3px;
+}
+
+.today-task-subtitle {
+  margin-bottom: 0;
+}
+
+.today-task-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.today-action-btn {
+  min-width: 72px;
+  padding: 5px 9px;
+  font-size: 0.72rem;
+}
+
+.today-action-postpone {
+  color: var(--wow-text-muted);
 }
 
 .checklist {
   display: grid;
   gap: 8px;
   padding: 8px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(0, 0, 0, 0.85);
   border-radius: var(--radius);
-  background: var(--panel);
+  background: linear-gradient(180deg, var(--wow-panel) 0%, var(--wow-panel-inner) 100%);
+  box-shadow: 0 0 0 1px rgba(200, 155, 60, 0.14), 0 0 8px rgba(0, 0, 0, 0.75) inset;
 }
 
 .checklist label {
@@ -112,7 +168,7 @@
   width: 100%;
   height: 8px;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--wow-border-soft);
   overflow: hidden;
   margin-bottom: 7px;
 }
@@ -120,7 +176,7 @@
 .bar i {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: linear-gradient(90deg, #7f5f20 0, var(--wow-gold) 100%);
 }
 
 .goal-metric-nav {
@@ -180,9 +236,60 @@
 }
 
 .routine-btn {
-  min-height: 42px;
-  text-align: center;
+  min-height: 50px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  text-align: left;
+  gap: 0;
   font-weight: 600;
+  border-color: var(--wow-border-soft);
+}
+
+.routine-btn-title {
+  width: 100%;
+  color: var(--wow-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.routine-btn.is-pending {
+  filter: grayscale(0.45) brightness(0.82);
+  border-color: color-mix(in srgb, var(--wow-border-soft) 85%, #2a2f3d);
+}
+
+.routine-btn.is-done {
+  filter: none;
+  border-color: color-mix(in srgb, var(--wow-gold) 64%, #3c2b10);
+  background: radial-gradient(circle at top, rgba(144, 112, 35, 0.22) 0, transparent 65%), linear-gradient(180deg, var(--wow-panel) 0%, var(--wow-panel-inner) 100%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wow-gold) 35%, transparent);
+}
+
+.routine-btn.is-done .routine-btn-title {
+  color: color-mix(in srgb, var(--wow-gold) 45%, var(--text));
+}
+
+.routine-btn:hover,
+.routine-btn:focus-visible {
+  outline: none;
+}
+
+.routine-btn.is-pending:hover,
+.routine-btn.is-pending:focus-visible {
+  border-color: color-mix(in srgb, var(--wow-border-soft) 85%, #2a2f3d);
+}
+
+.routine-btn.is-pending:hover .routine-btn-title,
+.routine-btn.is-pending:focus-visible .routine-btn-title {
+  color: var(--wow-text-muted);
+}
+
+.routine-btn.is-done:hover .routine-btn-title,
+.routine-btn.is-done:focus-visible .routine-btn-title {
+  color: var(--text);
 }
 
 .note-description {
@@ -282,6 +389,15 @@
   margin-bottom: 0;
 }
 
+.manage-btn {
+  font-size: 11px;
+  padding: 6px 10px;
+  color: var(--wow-text-muted);
+  margin-bottom: 3px;
+  min-width: 74px;
+  text-align: center;
+}
+
 .goal-charts-btn {
   margin-top: 4px;
 }
@@ -319,9 +435,10 @@
 }
 
 .review-grid-wrap {
-  border: 1px solid var(--line);
+  border: 1px solid rgba(0, 0, 0, 0.84);
   border-radius: var(--radius);
-  background: var(--panel);
+  background: linear-gradient(180deg, var(--wow-panel) 0%, var(--wow-panel-inner) 100%);
+  box-shadow: 0 0 0 1px rgba(200, 155, 60, 0.16), 0 0 8px rgba(0, 0, 0, 0.75) inset;
   width: 100%;
 }
 
@@ -446,7 +563,7 @@
 
 .is-dimmed {
   filter: grayscale(0.35) brightness(0.78);
-  border-color: #17242d;
+  border-color: #2a2317;
 }
 
 .is-dimmed .title,
@@ -456,15 +573,15 @@
 }
 
 .is-in-progress {
-  border-color: color-mix(in srgb, var(--accent-2) 64%, var(--line));
-  background: color-mix(in srgb, var(--accent-2) 14%, var(--panel));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-2) 35%, transparent);
+  border-color: color-mix(in srgb, var(--wow-gold) 64%, #3c2b10);
+  background: radial-gradient(circle at top, rgba(144, 112, 35, 0.22) 0, transparent 65%), linear-gradient(180deg, var(--wow-panel) 0%, var(--wow-panel-inner) 100%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wow-gold) 35%, transparent);
 }
 
 .is-in-progress .title,
 .is-in-progress .tags,
 .is-in-progress .meta-row {
-  color: color-mix(in srgb, var(--accent-2) 45%, var(--text));
+  color: color-mix(in srgb, var(--wow-gold) 45%, var(--text));
 }
 
 .cards.search-results {

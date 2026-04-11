@@ -30,23 +30,33 @@ export function TodayTab({
       <h2>Today</h2>
       <div className="stats">
         <div className="stat">
-          <span>{completedTodayCount}</span> tasks done
+          <span className="stat-value">{completedTodayCount}</span>
+          <span className="stat-label">tasks done</span>
         </div>
         <div className="stat">
-          <span>{routinesTodayCount}</span> routines done
+          <span className="stat-value">{routinesTodayCount}</span>
+          <span className="stat-label">routines done</span>
         </div>
         <div className="stat">
-          <span>{activeNoteCount}</span> notes untriaged
+          <span className="stat-value">{activeNoteCount}</span>
+          <span className="stat-label">notes untriaged</span>
         </div>
       </div>
       <h3>Top 3 Tasks</h3>
-      <div className="cards">
+      <div className="today-top3-list">
         {todayTop3.map((task) => (
-          <article key={task.id} className="card task-hero">
-            <div className="title">{task.title}</div>
-            <div className="actions">
-              <button onClick={() => void completeTask(task.id)}>Complete</button>
-              <button onClick={() => void postponeTask(task.id)}>Postpone</button>
+          <article key={task.id} className="card today-task-card">
+            <div className="today-task-main">
+              <div className="title today-task-title">{task.title}</div>
+              <div className="meta-row today-task-subtitle">{task.deadline ? `Due ${task.deadline}` : "No deadline"}</div>
+            </div>
+            <div className="today-task-actions">
+              <button className="today-action-btn" onClick={() => void completeTask(task.id)}>
+                Done
+              </button>
+              <button className="today-action-btn today-action-postpone" onClick={() => void postponeTask(task.id)}>
+                Later
+              </button>
             </div>
           </article>
         ))}
@@ -58,8 +68,8 @@ export function TodayTab({
           .map((routine) => {
             const complete = completions.some((c) => c.entityType === "routine" && c.entityId === routine.id && c.date === logicalDay);
             return (
-              <button key={routine.id} className={`routine-btn ${complete ? "ok" : ""}`} onClick={() => void completeRoutine(routine.id)}>
-                {routine.title}
+              <button key={routine.id} className={`routine-btn ${complete ? "is-done" : "is-pending"}`} onClick={() => void completeRoutine(routine.id)}>
+                <span className="routine-btn-title">{routine.title}</span>
               </button>
             );
           })}
