@@ -5,7 +5,7 @@
   backdrop-filter: blur(10px);
   background: color-mix(in srgb, var(--bg) 75%, transparent);
   border-bottom: 1px solid var(--line);
-  padding: 10px 12px;
+  padding: 7px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -23,7 +23,7 @@
 }
 
 .settings-btn {
-  padding: 4px 8px;
+  padding: 6px 9px;
   font-size: 0.72rem;
 }
 
@@ -90,7 +90,7 @@ mark {
 
 .filter-btn {
   font-size: 0.68rem;
-  padding: 4px 7px;
+  padding: 6px 9px;
 }
 
 .filter-menu {
