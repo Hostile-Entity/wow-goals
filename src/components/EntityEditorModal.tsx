@@ -354,19 +354,25 @@ export function EntityEditorModal({
                   </div>
                 </article>
               ) : null}
-              <div className="actions">
-                <button type="button" onClick={addGoalMetricInput}>
-                  Add Metric
-                </button>
-              </div>
             </>
           )}
 
-          <div className="actions">
-            <button type="submit" disabled={!canSave}>
-              Save
-            </button>
-          </div>
+          {type === "goal" ? (
+            <div className="actions goal-metric-footer">
+              <button type="button" onClick={addGoalMetricInput}>
+                Add Metric
+              </button>
+              <button type="submit" disabled={!canSave}>
+                Save
+              </button>
+            </div>
+          ) : (
+            <div className={`actions editor-save-row ${mode === "edit" ? "is-edit" : ""}`}>
+              <button type="submit" disabled={!canSave}>
+                Save
+              </button>
+            </div>
+          )}
         </form>
 
         {mode === "edit" && type === "note" && entity && onTriageNote ? (

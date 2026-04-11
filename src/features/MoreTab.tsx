@@ -1,7 +1,8 @@
-import { ReactNode } from "react";
+import { ReactNode, useMemo, useState } from "react";
 import { AppData, FilterKey, MoreTab as MoreTabId, getStatusBucket } from "../state/useAppData";
 import { ReviewTab } from "./ReviewTab";
 import { Goal, GoalMetric, Routine } from "../types";
+import { GoalMetricChartsModal } from "../components/GoalMetricChartsModal";
 
 interface MoreTabProps {
   moreTab: MoreTabId;
@@ -61,9 +62,11 @@ export function MoreTab({
   onManageGoal,
   formatDateTime,
 }: MoreTabProps) {
+  const [chartsGoalId, setChartsGoalId] = useState<string | null>(null);
+  const chartsGoal = useMemo(() => goals.find((goal) => goal.id === chartsGoalId), [goals, chartsGoalId]);
+
   return (
     <section>
-      <h2>More</h2>
       <div className="more-tabs">
         {[
           ["review", "Review"],
@@ -160,6 +163,9 @@ export function MoreTab({
                   </div>
                   <div className="entity-side">
                     <button onClick={() => onManageGoal(goal)}>Manage</button>
+                    <button className="goal-charts-btn" onClick={() => setChartsGoalId(goal.id)}>
+                      Charts
+                    </button>
                     <div className="meta-row entity-meta-time">
                       {goal.createdAt === goal.updatedAt
                         ? `Created ${formatDateTime(goal.createdAt)}`
@@ -188,6 +194,10 @@ export function MoreTab({
             toggleRoutineCompletionForDay={toggleRoutineCompletionForDay}
           />
         </>
+      )}
+
+      {chartsGoal && (
+        <GoalMetricChartsModal goal={chartsGoal} logs={logs} dayStartHour={dayStartHour} close={() => setChartsGoalId(null)} />
       )}
     </section>
   );
