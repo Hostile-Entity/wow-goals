@@ -71,6 +71,16 @@ export function ManageModal({
             <button onClick={() => void triageNote(selectedNote, "routine")}>To Routine</button>
             <button onClick={() => void editTitle("note", selectedNote.id, selectedNote.title)}>Edit Title</button>
             <button onClick={() => void editDescription("note", selectedNote.id, selectedNote.description)}>Edit Description</button>
+            {selectedNote.status !== "discarded" &&
+              (selectedNote.status === "in_progress" ? (
+                <button onClick={() => void updateEntity("note", selectedNote.id, (n: Note) => ({ ...n, status: "active" }))}>
+                  Mark Active
+                </button>
+              ) : (
+                <button onClick={() => void updateEntity("note", selectedNote.id, (n: Note) => ({ ...n, status: "in_progress" }))}>
+                  Mark In Progress
+                </button>
+              ))}
             {selectedNote.status === "discarded" ? (
               <button onClick={() => void recoverEntity("note", selectedNote.id)}>Recover</button>
             ) : (
@@ -136,6 +146,16 @@ export function ManageModal({
             </label>
             <button onClick={() => void editTitle("task", selectedTask.id, selectedTask.title)}>Edit Title</button>
             <button onClick={() => void editDescription("task", selectedTask.id, selectedTask.description)}>Edit Description</button>
+            {selectedTask.status !== "discarded" &&
+              (selectedTask.status === "in_progress" ? (
+                <button onClick={() => void updateEntity("task", selectedTask.id, (t: Task) => ({ ...t, status: "active" }))}>
+                  Mark Active
+                </button>
+              ) : (
+                <button onClick={() => void updateEntity("task", selectedTask.id, (t: Task) => ({ ...t, status: "in_progress" }))}>
+                  Mark In Progress
+                </button>
+              ))}
             {selectedTask.status === "discarded" ? (
               <button onClick={() => void recoverEntity("task", selectedTask.id)}>Recover</button>
             ) : (
@@ -170,6 +190,18 @@ export function ManageModal({
             <button onClick={() => void editDescription("routine", selectedRoutine.id, selectedRoutine.description)}>
               Edit Description
             </button>
+            {selectedRoutine.status !== "discarded" &&
+              (selectedRoutine.status === "in_progress" ? (
+                <button onClick={() => void updateEntity("routine", selectedRoutine.id, (r: Routine) => ({ ...r, status: "active" }))}>
+                  Mark Active
+                </button>
+              ) : (
+                <button
+                  onClick={() => void updateEntity("routine", selectedRoutine.id, (r: Routine) => ({ ...r, status: "in_progress" }))}
+                >
+                  Mark In Progress
+                </button>
+              ))}
             {selectedRoutine.status === "discarded" ? (
               <button onClick={() => void recoverEntity("routine", selectedRoutine.id)}>Recover</button>
             ) : (
@@ -205,6 +237,18 @@ export function ManageModal({
             </label>
             <button onClick={() => void editTitle("project", selectedProject.id, selectedProject.title)}>Edit Title</button>
             <button onClick={() => void editDescription("project", selectedProject.id, selectedProject.description)}>Edit Description</button>
+            {selectedProject.status !== "discarded" &&
+              (selectedProject.status === "in_progress" ? (
+                <button onClick={() => void updateEntity("project", selectedProject.id, (p: Project) => ({ ...p, status: "active" }))}>
+                  Mark Active
+                </button>
+              ) : (
+                <button
+                  onClick={() => void updateEntity("project", selectedProject.id, (p: Project) => ({ ...p, status: "in_progress" }))}
+                >
+                  Mark In Progress
+                </button>
+              ))}
             {selectedProject.status === "discarded" ? (
               <button onClick={() => void recoverEntity("project", selectedProject.id)}>Recover</button>
             ) : (
@@ -222,6 +266,16 @@ export function ManageModal({
               <button onClick={() => void addGoalMetric(selectedGoal)}>Add Metric</button>
               <button onClick={() => void editTitle("goal", selectedGoal.id, selectedGoal.title)}>Edit Title</button>
               <button onClick={() => void editDescription("goal", selectedGoal.id, selectedGoal.description)}>Edit Description</button>
+              {selectedGoal.status !== "discarded" &&
+                (selectedGoal.status === "in_progress" ? (
+                  <button onClick={() => void updateEntity("goal", selectedGoal.id, (g: Goal) => ({ ...g, status: "active" }))}>
+                    Mark Active
+                  </button>
+                ) : (
+                  <button onClick={() => void updateEntity("goal", selectedGoal.id, (g: Goal) => ({ ...g, status: "in_progress" }))}>
+                    Mark In Progress
+                  </button>
+                ))}
               {selectedGoal.status === "discarded" ? (
                 <button onClick={() => void recoverEntity("goal", selectedGoal.id)}>Recover</button>
               ) : (

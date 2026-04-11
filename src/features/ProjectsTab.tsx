@@ -5,36 +5,78 @@ interface ProjectsTabProps {
   filteredProjects: AppData["filteredProjects"];
   goals: AppData["state"]["goals"];
   statusLabel: AppData["statusLabel"];
+  onToggleTodo(projectId: string, lineIndex: number, checked: boolean): void;
   onManage(project: Project): void;
   formatDateTime(iso: string): string;
 }
 
-export function ProjectsTab({ filteredProjects, goals, statusLabel, onManage, formatDateTime }: ProjectsTabProps) {
+function parseTodoLine(line: string): { checked: boolean; text: string } {
+  const trimmed = line.trim();
+  if (/^\[(x|X)\]\s+/.test(trimmed)) return { checked: true, text: trimmed.replace(/^\[(x|X)\]\s+/, "") };
+  if (/^\[\s\]\s+/.test(trimmed)) return { checked: false, text: trimmed.replace(/^\[\s\]\s+/, "") };
+  return { checked: false, text: trimmed };
+}
+
+export function ProjectsTab({ filteredProjects, goals, statusLabel, onToggleTodo, onManage, formatDateTime }: ProjectsTabProps) {
   return (
     <div className="cards">
-      {filteredProjects.map((project) => (
-        <article
-          key={project.id}
-          id={`item-project-${project.id}`}
-          className={`card entity-card ${getStatusBucket(project) !== "active" ? "is-dimmed" : ""}`}
-        >
-          <div className="entity-main">
-            <div className="title entity-title">{project.title}</div>
-            <div className="tags entity-summary">
-              {project.goalId ? `goal ${goals.find((g) => g.id === project.goalId)?.title ?? "Unknown"}` : "No goal linked"}
+      {filteredProjects.map((project) => {
+        const bucket = getStatusBucket(project);
+        const cardToneClass = bucket === "in_progress" ? "is-in-progress" : bucket !== "active" ? "is-dimmed" : "";
+        const legacyTodo = (project as Project & { todo?: string }).todo ?? "";
+        const sourceDescription = `${project.description ?? ""}${legacyTodo ? `\n${legacyTodo}` : ""}`.trim();
+        const todoLines = sourceDescription
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+        const parsedTodo = todoLines.map((line, lineIndex) => ({ ...parseTodoLine(line), lineIndex }));
+        const undoneTodo = parsedTodo.filter((line) => !line.checked);
+        const visibleUndoneTodo = undoneTodo.slice(0, 3);
+        const completedCount = parsedTodo.filter((line) => line.checked).length;
+
+        return (
+          <article key={project.id} id={`item-project-${project.id}`} className={`card entity-card ${cardToneClass}`}>
+            <div className="entity-main">
+              <div className="title entity-title">{project.title}</div>
+              <div className="tags entity-summary">
+                {project.goalId ? `goal ${goals.find((g) => g.id === project.goalId)?.title ?? "Unknown"}` : "No goal linked"}
+              </div>
+              {parsedTodo.length > 0 ? (
+                <>
+                  <div className="tags entity-summary">
+                    {completedCount}/{parsedTodo.length} TODOs done
+                  </div>
+                  <div className="project-todo-list">
+                    {visibleUndoneTodo.map((line) => (
+                      <label key={`${project.id}-${line.lineIndex}`} className="project-todo-item">
+                        <input
+                          type="checkbox"
+                          checked={line.checked}
+                          onChange={(e) => onToggleTodo(project.id, line.lineIndex, e.currentTarget.checked)}
+                        />
+                        <span className={line.checked ? "project-todo-done" : ""}>{line.text}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {undoneTodo.length === 0 ? <div className="meta-row entity-summary">All TODOs completed</div> : null}
+                  {undoneTodo.length > visibleUndoneTodo.length ? (
+                    <div className="meta-row entity-summary">Showing first {visibleUndoneTodo.length} undone items</div>
+                  ) : null}
+                </>
+              ) : null}
+              <div className="tags entity-status">{statusLabel(project)}</div>
             </div>
-            <div className="tags entity-status">{statusLabel(project)}</div>
-          </div>
-          <div className="entity-side">
-            <button onClick={() => onManage(project)}>Manage</button>
-            <div className="meta-row entity-meta-time">
-              {project.createdAt === project.updatedAt
-                ? `Created ${formatDateTime(project.createdAt)}`
-                : `Updated ${formatDateTime(project.updatedAt)}`}
+            <div className="entity-side">
+              <button onClick={() => onManage(project)}>Manage</button>
+              <div className="meta-row entity-meta-time">
+                {project.createdAt === project.updatedAt
+                  ? `Created ${formatDateTime(project.createdAt)}`
+                  : `Updated ${formatDateTime(project.updatedAt)}`}
+              </div>
             </div>
-          </div>
-        </article>
-      ))}
+          </article>
+        );
+      })}
     </div>
   );
 }

@@ -219,31 +219,41 @@ function App() {
     await app.createProject(input);
   }
 
+  async function handleToggleProjectTodo(projectId: string, lineIndex: number, checked: boolean): Promise<void> {
+    await app.updateEntity("project", projectId, (project) => {
+      const sourceDescription = `${String(project.description ?? "")}${project.todo ? `\n${String(project.todo)}` : ""}`.trim();
+      const lines = sourceDescription
+        .split("\n")
+        .map((line: string) => line.trim())
+        .filter((line: string) => line.length > 0);
+      const rawLine = lines[lineIndex];
+      if (!rawLine) return project;
+
+      const text = rawLine.replace(/^\[(x|X|\s)\]\s+/, "").trim();
+      const prefix = checked ? "[x] " : "[ ] ";
+      lines[lineIndex] = `${prefix}${text}`;
+      return { ...project, description: lines.join("\n") };
+    });
+  }
+
   async function handleSaveGoal(input: Parameters<typeof app.createGoal>[0]): Promise<void> {
     if (editor?.mode === "edit" && editor.id) {
       await app.updateEntity("goal", editor.id, (g) => {
-        const metrics =
-          g.metrics && g.metrics.length > 0
-            ? [...g.metrics]
+        const nextMetrics =
+          input.metrics && input.metrics.length > 0
+            ? input.metrics.map((metric) => ({
+                id: metric.id || `metric_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+                name: metric.name.trim() || "Metric",
+                current: Number.isFinite(metric.current) ? metric.current : 0,
+                target: Number.isFinite(metric.target) ? metric.target : 10,
+              }))
             : [{ id: "legacy_primary", name: g.metricName, current: g.metricCurrent, target: g.metricTarget }];
-        const primaryId = g.primaryMetricId ?? metrics[0].id;
-        const nextMetrics = metrics.map((metric) =>
-          metric.id === primaryId
-            ? {
-                ...metric,
-                name: input.metricName ?? metric.name,
-                current: input.metricCurrent ?? metric.current,
-                target: input.metricTarget ?? metric.target,
-              }
-            : metric,
-        );
-        const primaryMetric = nextMetrics.find((metric) => metric.id === primaryId) ?? nextMetrics[0];
+        const primaryMetric = nextMetrics.find((metric) => metric.id === input.primaryMetricId) ?? nextMetrics[0];
 
         return {
           ...g,
           title: input.title,
           description: input.description ?? "",
-          isActive: input.isActive ?? g.isActive,
           metrics: nextMetrics,
           primaryMetricId: primaryMetric.id,
           metricName: primaryMetric.name,
@@ -333,7 +343,7 @@ function App() {
               <TodayTab
                 completedTodayCount={app.completedTodayCount}
                 routinesTodayCount={app.routinesTodayCount}
-                activeNoteCount={app.state.notes.filter((n) => n.status === "active").length}
+                activeNoteCount={app.state.notes.filter((n) => n.status === "active" || n.status === "in_progress").length}
                 todayTop3={app.todayTop3}
                 routines={app.state.routines}
                 completions={app.state.completions}
@@ -381,6 +391,9 @@ function App() {
                   filteredProjects={app.filteredProjects}
                   goals={app.state.goals}
                   statusLabel={app.statusLabel}
+                  onToggleTodo={(projectId, lineIndex, checked) => {
+                    void handleToggleProjectTodo(projectId, lineIndex, checked);
+                  }}
                   formatDateTime={formatDateTime}
                   onManage={(project) => setEditor({ mode: "edit", type: "project", id: project.id })}
                 />
@@ -411,10 +424,14 @@ function App() {
           setShowDebugTools={(next) => app.setShowDebugTools(next)}
           swVersion={app.swVersion}
           logicalDay={app.logicalDay}
+          logicalOffset={app.logicalOffset}
           isCheckingUpdate={app.isCheckingUpdate}
           isApplyingUpdate={app.isApplyingUpdate}
           closeSettingsPopup={app.closeSettingsPopup}
           checkForUpdates={app.checkForUpdates}
+          exportData={app.exportData}
+          importData={app.importData}
+          deleteAllData={app.deleteAllData}
           decrementLogicalDay={app.decrementLogicalDay}
           incrementLogicalDay={app.incrementLogicalDay}
           resetLogicalDayToToday={app.resetLogicalDayToToday}
@@ -437,6 +454,7 @@ function App() {
           onTriageNote={app.triageNote}
           onDoneTask={app.completeTask}
           onPostponeTask={app.postponeTask}
+          onSetStatus={(type, id, status) => app.updateEntity(type, id, (row) => ({ ...row, status }))}
           onDiscard={app.discardEntity}
           onRecover={app.recoverEntity}
           onDelete={app.permanentDelete}

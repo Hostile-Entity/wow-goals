@@ -1,6 +1,10 @@
 import { FilterKey, StatusFilter } from "../state/useAppData";
 
-const options: StatusFilter[] = ["all", "active", "inactive", "completed", "discarded"];
+const options: StatusFilter[] = ["all", "in_progress", "active", "inactive", "completed", "discarded"];
+
+function optionLabel(value: StatusFilter): string {
+  return value.replace("_", " ");
+}
 
 interface FilterControlProps {
   filterKey: FilterKey;
@@ -14,7 +18,7 @@ export function FilterControl({ current, isOpen, onToggle, onSelect }: FilterCon
   return (
     <div className="filter-wrap">
       <button className="filter-btn" onClick={onToggle}>
-        Filter: {current}
+        Filter: {optionLabel(current)}
       </button>
       {isOpen && (
         <div className="filter-menu">
@@ -26,7 +30,7 @@ export function FilterControl({ current, isOpen, onToggle, onSelect }: FilterCon
                 onSelect(option);
               }}
             >
-              {option}
+              {optionLabel(option)}
             </button>
           ))}
         </div>

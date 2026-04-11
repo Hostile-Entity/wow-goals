@@ -1,9 +1,37 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AppData, GoalDraft, ProjectDraft, RoutineDraft, TaskDraft } from "../state/useAppData";
-import { EntityType, Goal, Note, Project, Routine, Task } from "../types";
+import { EntityType, Goal, GoalMetric, ItemStatus, Note, Project, Routine, Task } from "../types";
 
 type EditableType = Extract<EntityType, "note" | "task" | "project" | "goal" | "routine">;
 type ExistingEntity = Note | Task | Project | Goal | Routine;
+type GoalMetricInput = { id: string; name: string; current: string; target: string };
+
+function makeMetricId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `metric_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function toMetricInputs(goal?: Goal): GoalMetricInput[] {
+  const source: GoalMetric[] =
+    goal?.metrics && goal.metrics.length > 0
+      ? goal.metrics
+      : [
+          {
+            id: goal?.primaryMetricId ?? makeMetricId(),
+            name: goal?.metricName ?? "Progress",
+            current: goal?.metricCurrent ?? 0,
+            target: goal?.metricTarget ?? 10,
+          },
+        ];
+
+  return source.map((metric) => ({
+    id: metric.id,
+    name: metric.name,
+    current: String(metric.current),
+    target: String(metric.target),
+  }));
+}
 
 interface EntityEditorModalProps {
   mode: "create" | "edit";
@@ -19,6 +47,7 @@ interface EntityEditorModalProps {
   onTriageNote?(note: Note, to: Exclude<EntityType, "note">): Promise<void>;
   onDoneTask?(taskId: string): Promise<void>;
   onPostponeTask?(taskId: string): Promise<void>;
+  onSetStatus?(type: EditableType, id: string, status: Extract<ItemStatus, "active" | "in_progress">): Promise<void>;
   onDiscard?(type: EditableType, id: string): Promise<void>;
   onRecover?(type: EditableType, id: string): Promise<void>;
   onDelete?(type: EditableType, id: string): Promise<void>;
@@ -39,6 +68,7 @@ export function EntityEditorModal({
   onTriageNote,
   onDoneTask,
   onPostponeTask,
+  onSetStatus,
   onDiscard,
   onRecover,
   onDelete,
@@ -51,11 +81,9 @@ export function EntityEditorModal({
   const [projectId, setProjectId] = useState("");
   const [priority, setPriority] = useState("1");
   const [importance, setImportance] = useState("3");
-  const [effort, setEffort] = useState("3");
-  const [isActive, setIsActive] = useState(true);
-  const [metricName, setMetricName] = useState("Progress");
-  const [metricCurrent, setMetricCurrent] = useState("0");
-  const [metricTarget, setMetricTarget] = useState("10");
+  const [goalMetrics, setGoalMetrics] = useState<GoalMetricInput[]>([{ id: makeMetricId(), name: "Progress", current: "0", target: "10" }]);
+  const [primaryMetricId, setPrimaryMetricId] = useState("");
+  const [currentMetricIndex, setCurrentMetricIndex] = useState(0);
 
   useEffect(() => {
     const taskEntity = type === "task" ? (entity as Task | undefined) : undefined;
@@ -71,16 +99,26 @@ export function EntityEditorModal({
     setProjectId(taskEntity?.projectId ?? "");
     setPriority(String(taskEntity?.priority ?? 1));
     setImportance(String(projectEntity?.importance ?? 3));
-    setEffort(String(projectEntity?.effort ?? 3));
-    setIsActive(projectEntity?.isActive ?? goalEntity?.isActive ?? true);
     if (type === "goal") {
-      const g = goalEntity;
-      const primary = g?.metrics?.find((m) => m.id === g.primaryMetricId) ?? g?.metrics?.[0];
-      setMetricName(primary?.name ?? g?.metricName ?? "Progress");
-      setMetricCurrent(String(primary?.current ?? g?.metricCurrent ?? 0));
-      setMetricTarget(String(primary?.target ?? g?.metricTarget ?? 10));
+      const metrics = toMetricInputs(goalEntity);
+      setGoalMetrics(metrics);
+      setPrimaryMetricId(goalEntity?.primaryMetricId && metrics.some((metric) => metric.id === goalEntity.primaryMetricId) ? goalEntity.primaryMetricId : metrics[0].id);
+      setCurrentMetricIndex(0);
+    } else {
+      setGoalMetrics([{ id: makeMetricId(), name: "Progress", current: "0", target: "10" }]);
+      setPrimaryMetricId("");
+      setCurrentMetricIndex(0);
     }
   }, [entity, type]);
+
+  useEffect(() => {
+    setCurrentMetricIndex((prev) => {
+      if (goalMetrics.length === 0) return 0;
+      if (prev < 0) return 0;
+      if (prev > goalMetrics.length - 1) return goalMetrics.length - 1;
+      return prev;
+    });
+  }, [goalMetrics]);
 
   const modalTitle = useMemo(() => `${mode === "create" ? "Create" : "Edit"} ${type}`, [mode, type]);
 
@@ -115,21 +153,26 @@ export function EntityEditorModal({
         deadline: deadline || undefined,
         goalId: goalId || undefined,
         importance: Number(importance) || 3,
-        effort: Number(effort) || 3,
-        isActive,
       });
       close();
       return;
     }
 
     if (type === "goal") {
+      const metrics = goalMetrics.map((metric) => ({
+        id: metric.id,
+        name: metric.name.trim() || "Metric",
+        current: Number(metric.current) || 0,
+        target: Number(metric.target) || 10,
+      }));
+      if (metrics.length === 0) return;
+      const primary = metrics.find((metric) => metric.id === primaryMetricId) ?? metrics[0];
+
       await onSaveGoal({
         title: cleanTitle,
         description,
-        isActive,
-        metricName,
-        metricCurrent: Number(metricCurrent) || 0,
-        metricTarget: Number(metricTarget) || 10,
+        metrics,
+        primaryMetricId: primary.id,
       });
       close();
       return;
@@ -145,6 +188,37 @@ export function EntityEditorModal({
 
   const canSave = title.trim().length > 0;
 
+  function updateGoalMetric(id: string, patch: Partial<GoalMetricInput>): void {
+    setGoalMetrics((prev) => prev.map((metric) => (metric.id === id ? { ...metric, ...patch } : metric)));
+  }
+
+  function addGoalMetricInput(): void {
+    const id = makeMetricId();
+    setGoalMetrics((prev) => {
+      const next = [...prev, { id, name: "", current: "0", target: "10" }];
+      setCurrentMetricIndex(next.length - 1);
+      return next;
+    });
+    setPrimaryMetricId((prev) => prev || id);
+  }
+
+  function removeGoalMetricInput(id: string): void {
+    setGoalMetrics((prev) => {
+      if (prev.length <= 1) return prev;
+      const removedIndex = prev.findIndex((metric) => metric.id === id);
+      const next = prev.filter((metric) => metric.id !== id);
+      if (primaryMetricId === id) {
+        setPrimaryMetricId(next[0]?.id ?? "");
+      }
+      if (removedIndex >= 0) {
+        setCurrentMetricIndex((idx) => Math.max(0, idx > removedIndex ? idx - 1 : Math.min(idx, next.length - 1)));
+      }
+      return next;
+    });
+  }
+
+  const currentMetric = goalMetrics[currentMetricIndex];
+
   return (
     <div className="modal-backdrop">
       <section className="modal" onClick={(e) => e.stopPropagation()}>
@@ -159,10 +233,22 @@ export function EntityEditorModal({
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
           </label>
 
-          <label className="inline-select">
-            Description
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" rows={3} />
-          </label>
+          {type === "project" ? (
+            <label className="inline-select">
+              Description
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Plan setup\nDraft architecture\nShip MVP"
+                rows={8}
+              />
+            </label>
+          ) : (
+            <label className="inline-select">
+              Description
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" rows={3} />
+            </label>
+          )}
 
           {(type === "task" || type === "project") && (
             <label className="inline-select">
@@ -212,33 +298,67 @@ export function EntityEditorModal({
                 Importance
                 <input type="number" min={1} max={5} value={importance} onChange={(e) => setImportance(e.target.value)} />
               </label>
-              <label className="inline-select">
-                Effort
-                <input type="number" min={1} max={5} value={effort} onChange={(e) => setEffort(e.target.value)} />
-              </label>
             </>
-          )}
-
-          {(type === "project" || type === "goal") && (
-            <label>
-              <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} /> Active
-            </label>
           )}
 
           {type === "goal" && (
             <>
-              <label className="inline-select">
-                Primary metric name
-                <input value={metricName} onChange={(e) => setMetricName(e.target.value)} />
-              </label>
-              <label className="inline-select">
-                Current value
-                <input type="number" value={metricCurrent} onChange={(e) => setMetricCurrent(e.target.value)} />
-              </label>
-              <label className="inline-select">
-                Target value
-                <input type="number" value={metricTarget} onChange={(e) => setMetricTarget(e.target.value)} />
-              </label>
+              <div className="goal-metric-nav">
+                <button type="button" onClick={() => setCurrentMetricIndex((idx) => Math.max(0, idx - 1))} disabled={currentMetricIndex === 0}>
+                  ←
+                </button>
+                <div className="meta-row">
+                  Metric {goalMetrics.length === 0 ? 0 : currentMetricIndex + 1} / {goalMetrics.length}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentMetricIndex((idx) => Math.min(goalMetrics.length - 1, idx + 1))}
+                  disabled={currentMetricIndex >= goalMetrics.length - 1}
+                >
+                  →
+                </button>
+              </div>
+              {currentMetric ? (
+                <article key={currentMetric.id} className="card">
+                  <label className="inline-select">
+                    Metric name
+                    <input value={currentMetric.name} onChange={(e) => updateGoalMetric(currentMetric.id, { name: e.target.value })} />
+                  </label>
+                  <label className="inline-select">
+                    Current value
+                    <input
+                      type="number"
+                      value={currentMetric.current}
+                      onChange={(e) => updateGoalMetric(currentMetric.id, { current: e.target.value })}
+                    />
+                  </label>
+                  <label className="inline-select">
+                    Target value
+                    <input
+                      type="number"
+                      value={currentMetric.target}
+                      onChange={(e) => updateGoalMetric(currentMetric.id, { target: e.target.value })}
+                    />
+                  </label>
+                  <div className="actions">
+                    <button
+                      type="button"
+                      className={primaryMetricId === currentMetric.id ? "active" : ""}
+                      onClick={() => setPrimaryMetricId(currentMetric.id)}
+                    >
+                      {primaryMetricId === currentMetric.id ? "Primary" : "Set Primary"}
+                    </button>
+                    <button type="button" onClick={() => removeGoalMetricInput(currentMetric.id)} disabled={goalMetrics.length <= 1}>
+                      Remove
+                    </button>
+                  </div>
+                </article>
+              ) : null}
+              <div className="actions">
+                <button type="button" onClick={addGoalMetricInput}>
+                  Add Metric
+                </button>
+              </div>
             </>
           )}
 
@@ -262,6 +382,13 @@ export function EntityEditorModal({
           <div className="actions">
             {type === "task" && onDoneTask ? <button onClick={() => void onDoneTask(entity.id)}>Done</button> : null}
             {type === "task" && onPostponeTask ? <button onClick={() => void onPostponeTask(entity.id)}>Postpone</button> : null}
+            {entity.status !== "discarded" && onSetStatus ? (
+              entity.status === "in_progress" ? (
+                <button onClick={() => void onSetStatus(type, entity.id, "active")}>Mark Active</button>
+              ) : (
+                <button onClick={() => void onSetStatus(type, entity.id, "in_progress")}>Mark In Progress</button>
+              )
+            ) : null}
             {entity.status === "discarded" ? (
               <button onClick={() => onRecover && void onRecover(type, entity.id)}>Recover</button>
             ) : (

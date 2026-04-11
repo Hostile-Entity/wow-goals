@@ -1,6 +1,6 @@
 export type EntityType = "note" | "task" | "project" | "goal" | "routine";
 
-export type ItemStatus = "active" | "completed" | "discarded";
+export type ItemStatus = "active" | "in_progress" | "completed" | "discarded";
 
 export interface BaseEntity {
   id: string;
@@ -35,7 +35,6 @@ export interface Project extends BaseEntity {
   goalId?: string;
   deadline?: string;
   importance: number;
-  effort: number;
   isActive: boolean;
 }
 
@@ -83,7 +82,7 @@ export interface EventLog {
 
 export interface AppSettings {
   id: "settings";
-  logicalDate: string;
+  dayOffset: number;
 }
 
 export interface AppStateData {

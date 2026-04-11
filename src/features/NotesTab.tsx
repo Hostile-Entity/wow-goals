@@ -11,30 +11,31 @@ interface NotesTabProps {
 export function NotesTab({ filteredNotes, statusLabel, onManage, formatDateTime }: NotesTabProps) {
   return (
     <div className="cards">
-      {filteredNotes.map((note) => (
-        <article
-          key={note.id}
-          id={`item-note-${note.id}`}
-          className={`card note-card ${getStatusBucket(note) !== "active" ? "is-dimmed" : ""}`}
-        >
-          <div className="note-main">
-            <div className="title note-title">{note.title}</div>
-            {note.description ? <div className="note-description">{note.description}</div> : null}
-            <div className="tags note-status">
-              {statusLabel(note)}
-              {note.triagedTo ? ` -> ${note.triagedTo}` : ""}
+      {filteredNotes.map((note) => {
+        const bucket = getStatusBucket(note);
+        const cardToneClass = bucket === "in_progress" ? "is-in-progress" : bucket !== "active" ? "is-dimmed" : "";
+
+        return (
+          <article key={note.id} id={`item-note-${note.id}`} className={`card note-card ${cardToneClass}`}>
+            <div className="note-main">
+              <div className="title note-title">{note.title}</div>
+              {note.description ? <div className="note-description">{note.description}</div> : null}
+              <div className="tags note-status">
+                {statusLabel(note)}
+                {note.triagedTo ? ` -> ${note.triagedTo}` : ""}
+              </div>
             </div>
-          </div>
-          <div className="note-side">
-            <button onClick={() => onManage(note)}>Manage</button>
-            <div className="meta-row note-meta-time">
-              {note.createdAt === note.updatedAt
-                ? `Created ${formatDateTime(note.createdAt)}`
-                : `Updated ${formatDateTime(note.updatedAt)}`}
+            <div className="note-side">
+              <button onClick={() => onManage(note)}>Manage</button>
+              <div className="meta-row note-meta-time">
+                {note.createdAt === note.updatedAt
+                  ? `Created ${formatDateTime(note.createdAt)}`
+                  : `Updated ${formatDateTime(note.updatedAt)}`}
+              </div>
             </div>
-          </div>
-        </article>
-      ))}
+          </article>
+        );
+      })}
     </div>
   );
 }

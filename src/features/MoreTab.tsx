@@ -1,6 +1,6 @@
 import { FormEvent, ReactNode } from "react";
 import { AppData, FilterKey, MoreTab as MoreTabId, getStatusBucket } from "../state/useAppData";
-import { Goal, Routine } from "../types";
+import { Goal, GoalMetric, Routine } from "../types";
 
 interface MoreTabProps {
   moreTab: MoreTabId;
@@ -76,29 +76,30 @@ export function MoreTab({
             <button onClick={onCreateRoutine}>+ Routine</button>
           </div>
           <div className="cards">
-            {filteredRoutines.map((routine) => (
-              <article
-                key={routine.id}
-                id={`item-routine-${routine.id}`}
-                className={`card entity-card ${getStatusBucket(routine) !== "active" ? "is-dimmed" : ""}`}
-              >
-                <div className="entity-main">
-                  <div className="title entity-title">{routine.title}</div>
-                  <div className="tags entity-summary">
-                    {routine.goalId ? `goal ${goals.find((g) => g.id === routine.goalId)?.title ?? "Unknown"}` : "No goal linked"}
+            {filteredRoutines.map((routine) => {
+              const bucket = getStatusBucket(routine);
+              const cardToneClass = bucket === "in_progress" ? "is-in-progress" : bucket !== "active" ? "is-dimmed" : "";
+
+              return (
+                <article key={routine.id} id={`item-routine-${routine.id}`} className={`card entity-card ${cardToneClass}`}>
+                  <div className="entity-main">
+                    <div className="title entity-title">{routine.title}</div>
+                    <div className="tags entity-summary">
+                      {routine.goalId ? `goal ${goals.find((g) => g.id === routine.goalId)?.title ?? "Unknown"}` : "No goal linked"}
+                    </div>
+                    <div className="tags entity-status">{statusLabel(routine)}</div>
                   </div>
-                  <div className="tags entity-status">{statusLabel(routine)}</div>
-                </div>
-                <div className="entity-side">
-                  <button onClick={() => onManageRoutine(routine)}>Manage</button>
-                  <div className="meta-row entity-meta-time">
-                    {routine.createdAt === routine.updatedAt
-                      ? `Created ${formatDateTime(routine.createdAt)}`
-                      : `Updated ${formatDateTime(routine.updatedAt)}`}
+                  <div className="entity-side">
+                    <button onClick={() => onManageRoutine(routine)}>Manage</button>
+                    <div className="meta-row entity-meta-time">
+                      {routine.createdAt === routine.updatedAt
+                        ? `Created ${formatDateTime(routine.createdAt)}`
+                        : `Updated ${formatDateTime(routine.updatedAt)}`}
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         </>
       )}
@@ -115,23 +116,39 @@ export function MoreTab({
           <div className="cards">
             {filteredGoals.map((goal) => {
               const pMetric = primaryMetric(goal);
+              const baseMetrics: GoalMetric[] =
+                goal.metrics && goal.metrics.length > 0
+                  ? goal.metrics
+                  : [{ id: goal.primaryMetricId ?? "legacy_primary", name: goal.metricName, current: goal.metricCurrent, target: goal.metricTarget }];
+              const primaryId = goal.primaryMetricId ?? pMetric.id;
+              const orderedMetrics = [...baseMetrics].sort((a, b) => {
+                if (a.id === primaryId) return -1;
+                if (b.id === primaryId) return 1;
+                return 0;
+              });
               const linkedProjects = projects.filter((p) => p.goalId === goal.id);
               const linkedTasks = tasks.filter((t) => t.goalId === goal.id);
               const linkedRoutines = routines.filter((r) => r.goalId === goal.id);
-              const progress = pMetric.target > 0 ? Math.min(100, Math.round((pMetric.current / pMetric.target) * 100)) : 0;
+              const bucket = getStatusBucket(goal);
+              const cardToneClass = bucket === "in_progress" ? "is-in-progress" : bucket !== "active" ? "is-dimmed" : "";
               return (
-                <article
-                  key={goal.id}
-                  id={`item-goal-${goal.id}`}
-                  className={`card entity-card ${getStatusBucket(goal) !== "active" ? "is-dimmed" : ""}`}
-                >
+                <article key={goal.id} id={`item-goal-${goal.id}`} className={`card entity-card ${cardToneClass}`}>
                   <div className="entity-main">
                     <div className="title entity-title">{goal.title}</div>
-                    <div className="tags entity-summary">
-                      {pMetric.name}: {pMetric.current}/{pMetric.target} ({progress}%)
-                    </div>
-                    <div className="bar">
-                      <i style={{ width: `${progress}%` }} />
+                    <div className="goal-metric-stack">
+                      {orderedMetrics.map((metric) => {
+                        const progress = metric.target > 0 ? Math.min(100, Math.round((metric.current / metric.target) * 100)) : 0;
+                        return (
+                          <div key={metric.id} className="goal-metric-item">
+                            <div className="tags entity-summary">
+                              {metric.name}: {metric.current}/{metric.target} ({progress}%)
+                            </div>
+                            <div className="bar">
+                              <i style={{ width: `${progress}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                     <div className="tags entity-summary">
                       linked: {linkedProjects.length} projects, {linkedTasks.length} tasks, {linkedRoutines.length} routines
