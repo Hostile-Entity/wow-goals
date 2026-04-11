@@ -6,6 +6,7 @@ interface SettingsModalProps {
   swVersion: string;
   logicalDay: string;
   logicalOffset: number;
+  dayStartHour: number;
   isCheckingUpdate: boolean;
   isApplyingUpdate: boolean;
   closeSettingsPopup(): void;
@@ -17,6 +18,8 @@ interface SettingsModalProps {
   incrementLogicalDay(): Promise<void>;
   resetLogicalDayToToday(): Promise<void>;
   setLogicalDay(day: string): Promise<void>;
+  setDayStartHour(hour: number): Promise<void>;
+  openCompleteLog(): void;
 }
 
 export function SettingsModal({
@@ -25,6 +28,7 @@ export function SettingsModal({
   swVersion,
   logicalDay,
   logicalOffset,
+  dayStartHour,
   isCheckingUpdate,
   isApplyingUpdate,
   closeSettingsPopup,
@@ -36,6 +40,8 @@ export function SettingsModal({
   incrementLogicalDay,
   resetLogicalDayToToday,
   setLogicalDay,
+  setDayStartHour,
+  openCompleteLog,
 }: SettingsModalProps) {
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -62,6 +68,7 @@ export function SettingsModal({
           <div className="actions">
             <button onClick={() => void exportData()}>Export data to JSON</button>
             <button onClick={() => importInputRef.current?.click()}>Import data from JSON</button>
+            <button onClick={openCompleteLog}>Complete log</button>
             <button className="danger" onClick={() => void deleteAllData()}>
               Delete all data
             </button>
@@ -79,6 +86,26 @@ export function SettingsModal({
               e.currentTarget.value = "";
             }}
           />
+        </div>
+        <div className="card">
+          <div className="title">Day Boundary</div>
+          <div className="tags">A new calendar day starts at {String(dayStartHour).padStart(2, "0")}:00 local time.</div>
+          <div className="actions">
+            <button
+              onClick={() => {
+                const raw = window.prompt("Set day boundary hour (0-23)", String(dayStartHour));
+                if (raw === null) return;
+                const hour = Number(raw);
+                if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
+                  window.alert("Please enter an hour from 0 to 23.");
+                  return;
+                }
+                void setDayStartHour(hour);
+              }}
+            >
+              Set Day Boundary
+            </button>
+          </div>
         </div>
         {showDebugTools && (
           <div className="card">

@@ -83,6 +83,7 @@ export interface EventLog {
 export interface AppSettings {
   id: "settings";
   dayOffset: number;
+  dayStartHour: number;
 }
 
 export interface AppStateData {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { clearStore, deleteItem, getAll, getById, putItem, toDayString, toWeekKey, uid } from "../db";
+import { clearStore, deleteItem, getAll, getById, putItem, toDayString, uid } from "../db";
 import {
   AppSettings,
   AppStateData,
@@ -48,7 +48,8 @@ export type RoutineDraft = {
   goalId?: string;
 };
 
-const emptySettings: AppSettings = { id: "settings", dayOffset: 0 };
+const DEFAULT_DAY_START_HOUR = 5;
+const emptySettings: AppSettings = { id: "settings", dayOffset: 0, dayStartHour: DEFAULT_DAY_START_HOUR };
 const dataStores = ["notes", "tasks", "projects", "goals", "routines", "completions", "reviews", "logs"] as const;
 
 type BackupPayload = {
@@ -112,20 +113,24 @@ function dayDiff(baseDay: string, targetDay: string): number {
   return Math.round((target.getTime() - base.getTime()) / 86400000);
 }
 
-function toLogicalDay(offset: number, nowMs: number): string {
+function toLogicalDay(offset: number, nowMs: number, dayStartHour: number): string {
   const d = new Date(nowMs);
   d.setDate(d.getDate() + offset);
-  return toDayString(d.toISOString());
+  return toDayString(d.toISOString(), dayStartHour);
 }
 
 function normalizeSettings(raw: unknown): AppSettings {
   if (raw && typeof raw === "object" && "id" in raw && (raw as { id?: string }).id === "settings") {
-    const row = raw as { dayOffset?: unknown; logicalDate?: unknown };
+    const row = raw as { dayOffset?: unknown; logicalDate?: unknown; dayStartHour?: unknown };
+    const parsedDayStartHour =
+      typeof row.dayStartHour === "number" && Number.isFinite(row.dayStartHour)
+        ? Math.max(0, Math.min(23, Math.trunc(row.dayStartHour)))
+        : DEFAULT_DAY_START_HOUR;
     if (typeof row.dayOffset === "number" && Number.isFinite(row.dayOffset)) {
-      return { id: "settings", dayOffset: Math.trunc(row.dayOffset) };
+      return { id: "settings", dayOffset: Math.trunc(row.dayOffset), dayStartHour: parsedDayStartHour };
     }
     if (typeof row.logicalDate === "string") {
-      return { id: "settings", dayOffset: dayDiff(toDayString(), row.logicalDate) };
+      return { id: "settings", dayOffset: dayDiff(toDayString(undefined, parsedDayStartHour), row.logicalDate), dayStartHour: parsedDayStartHour };
     }
   }
   return emptySettings;
@@ -151,7 +156,7 @@ export function useAppData() {
   const [swVersion, setSwVersion] = useState("unknown");
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [isApplyingUpdate, setIsApplyingUpdate] = useState(false);
-  const [moreTab, setMoreTab] = useState<MoreTab>("routines");
+  const [moreTab, setMoreTab] = useState<MoreTab>("review");
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [filters, setFilters] = useState<Record<FilterKey, StatusFilter>>({
     notes: "all",
@@ -166,7 +171,8 @@ export function useAppData() {
   const noteComposerRef = useRef<HTMLFormElement | null>(null);
 
   const logicalOffset = state.settings.dayOffset;
-  const logicalDay = toLogicalDay(logicalOffset, clockNowMs);
+  const dayStartHour = state.settings.dayStartHour;
+  const logicalDay = toLogicalDay(logicalOffset, clockNowMs, dayStartHour);
 
   async function reloadAll(): Promise<void> {
     const settings = await getById("settings", "settings");
@@ -674,6 +680,33 @@ export function useAppData() {
     await reloadAll();
   }
 
+  async function toggleRoutineCompletionForDay(routineId: string, day: string): Promise<void> {
+    const id = `routine_${routineId}_${day}`;
+    const existing = await getById("completions", id);
+    if (existing) {
+      const cancel = window.confirm(`Remove completion for ${day}?`);
+      if (!cancel) return;
+      await deleteItem("completions", id);
+      await logEvent("undo-complete", "routine", routineId, `Undid routine completion on ${day}`);
+      await reloadAll();
+      return;
+    }
+
+    const ok = window.confirm(`Mark routine as completed for ${day}?`);
+    if (!ok) return;
+    const hour = String(dayStartHour).padStart(2, "0");
+    const completedAt = new Date(`${day}T${hour}:00:00`).toISOString();
+    await putItem("completions", {
+      id,
+      entityType: "routine",
+      entityId: routineId,
+      date: day,
+      completedAt,
+    });
+    await logEvent("complete", "routine", routineId, `Routine completed on ${day}`);
+    await reloadAll();
+  }
+
   async function editTitle(type: EntityType, id: string, currentTitle: string): Promise<void> {
     const title = window.prompt("Title", currentTitle)?.trim();
     if (!title) return;
@@ -818,15 +851,50 @@ export function useAppData() {
     await reloadAll();
   }
 
-  async function saveWeeklyReview(form: FormData): Promise<void> {
+  async function toggleProjectTodo(projectId: string, lineIndex: number, checked: boolean): Promise<void> {
+    const current = await getById("projects", projectId);
+    if (!current) return;
+
+    const sourceDescription = `${String(current.description ?? "")}${(current as Project & { todo?: string }).todo ? `\n${String((current as Project & { todo?: string }).todo)}` : ""}`.trim();
+    const lines = sourceDescription
+      .split("\n")
+      .map((line: string) => line.trim())
+      .filter((line: string) => line.length > 0);
+    const rawLine = lines[lineIndex];
+    if (!rawLine) return;
+
+    const text = rawLine.replace(/^\[(x|X|\s)\]\s+/, "").trim();
+    const prefix = checked ? "[x] " : "[ ] ";
+    lines[lineIndex] = `${prefix}${text}`;
+    const updatedProject: Project = { ...current, description: lines.join("\n"), updatedAt: nowIso() };
+
+    await putItem("projects", updatedProject);
+    await logEvent(
+      "project-todo",
+      "project",
+      projectId,
+      JSON.stringify({ lineIndex, checked, text, occurredAt: nowIso() }),
+    );
+    await reloadAll();
+  }
+
+  async function saveWeeklyReview(input: {
+    weekKey: string;
+    inboxCleared: boolean;
+    tasksPrioritized: boolean;
+    weekPlanned: boolean;
+    goalsChecked: boolean;
+    note: string;
+  }): Promise<void> {
+    const existing = state.reviews.find((review) => review.weekKey === input.weekKey);
     const review: WeeklyReview = {
-      id: uid("review"),
-      weekKey: toWeekKey(logicalDay),
-      inboxCleared: form.get("inboxCleared") === "on",
-      tasksPrioritized: form.get("tasksPrioritized") === "on",
-      weekPlanned: form.get("weekPlanned") === "on",
-      goalsChecked: form.get("goalsChecked") === "on",
-      note: String(form.get("note") ?? ""),
+      id: existing?.id ?? uid("review"),
+      weekKey: input.weekKey,
+      inboxCleared: input.inboxCleared,
+      tasksPrioritized: input.tasksPrioritized,
+      weekPlanned: input.weekPlanned,
+      goalsChecked: input.goalsChecked,
+      note: input.note,
       createdAt: nowIso(),
     };
     await putItem("reviews", review);
@@ -835,29 +903,36 @@ export function useAppData() {
   }
 
   async function setLogicalDay(day: string): Promise<void> {
-    const offset = dayDiff(toDayString(), day);
-    await putItem("settings", { id: "settings", dayOffset: offset });
+    const offset = dayDiff(toDayString(undefined, dayStartHour), day);
+    await putItem("settings", { id: "settings", dayOffset: offset, dayStartHour });
     await logEvent("debug-date", "settings", "settings", `Logical day offset set to ${offset} (${day})`);
     await reloadAll();
   }
 
   async function decrementLogicalDay(): Promise<void> {
     const nextOffset = logicalOffset - 1;
-    await putItem("settings", { id: "settings", dayOffset: nextOffset });
+    await putItem("settings", { id: "settings", dayOffset: nextOffset, dayStartHour });
     await logEvent("debug-date", "settings", "settings", `Logical day offset changed to ${nextOffset}`);
     await reloadAll();
   }
 
   async function incrementLogicalDay(): Promise<void> {
     const nextOffset = logicalOffset + 1;
-    await putItem("settings", { id: "settings", dayOffset: nextOffset });
+    await putItem("settings", { id: "settings", dayOffset: nextOffset, dayStartHour });
     await logEvent("debug-date", "settings", "settings", `Logical day offset changed to ${nextOffset}`);
     await reloadAll();
   }
 
   async function resetLogicalDayToToday(): Promise<void> {
-    await putItem("settings", { id: "settings", dayOffset: 0 });
+    await putItem("settings", { id: "settings", dayOffset: 0, dayStartHour });
     await logEvent("debug-date", "settings", "settings", "Logical day offset reset to 0");
+    await reloadAll();
+  }
+
+  async function setDayStartHour(nextHour: number): Promise<void> {
+    const hour = Math.max(0, Math.min(23, Math.trunc(nextHour)));
+    await putItem("settings", { id: "settings", dayOffset: logicalOffset, dayStartHour: hour });
+    await logEvent("settings", "settings", "settings", `Day starts at ${hour}:00`);
     await reloadAll();
   }
 
@@ -960,8 +1035,8 @@ export function useAppData() {
   const filteredGoals = useMemo(() => sortAndFilterItems(state.goals, filters.goals), [state.goals, filters.goals]);
   const linkableGoals = useMemo(() => state.goals.filter((g) => g.status !== "discarded"), [state.goals]);
   const linkableProjects = useMemo(() => state.projects.filter((p) => p.status !== "discarded"), [state.projects]);
-  const completedTodayCount = state.completions.filter((c) => c.date === logicalDay && c.entityType === "task").length;
-  const routinesTodayCount = state.completions.filter((c) => c.date === logicalDay && c.entityType === "routine").length;
+  const completedTodayCount = state.completions.filter((c) => toDayString(c.completedAt, dayStartHour) === logicalDay && c.entityType === "task").length;
+  const routinesTodayCount = state.completions.filter((c) => toDayString(c.completedAt, dayStartHour) === logicalDay && c.entityType === "routine").length;
 
   function statusLabel(item: SortableEntity): string {
     return getStatusBucket(item).replace("_", " ");
@@ -991,6 +1066,7 @@ export function useAppData() {
     noteTextareaRef,
     noteComposerRef,
     logicalOffset,
+    dayStartHour,
     logicalDay,
     activeTasks,
     todayTop3,
@@ -1009,6 +1085,7 @@ export function useAppData() {
     deleteAllData,
     closeSettingsPopup,
     setLogicalDay,
+    setDayStartHour,
     decrementLogicalDay,
     incrementLogicalDay,
     resetLogicalDayToToday,
@@ -1021,12 +1098,14 @@ export function useAppData() {
     permanentDelete,
     triageNote,
     completeRoutine,
+    toggleRoutineCompletionForDay,
     editTitle,
     editDescription,
     addQuickTask,
     createTask,
     addQuickProject,
     createProject,
+    toggleProjectTodo,
     addQuickGoal,
     createGoal,
     addGoalMetric,
