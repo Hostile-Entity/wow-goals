@@ -33,7 +33,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
-  padding: 8px;
+  padding: 6px;
   animation: fade-in 180ms ease both;
 }
 

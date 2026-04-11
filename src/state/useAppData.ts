@@ -1021,7 +1021,10 @@ export function useAppData() {
     [state.tasks],
   );
 
-  const todayTop3 = activeTasks.slice(0, 3);
+  const todayTop3 = useMemo(
+    () => activeTasks.filter((task) => task.lastPostponedAt !== logicalDay).slice(0, 3),
+    [activeTasks, logicalDay],
+  );
   const filteredNotes = useMemo(() => sortAndFilterItems(state.notes, filters.notes), [state.notes, filters.notes]);
   const filteredTasks = useMemo(() => sortAndFilterItems(state.tasks, filters.tasks), [state.tasks, filters.tasks]);
   const filteredProjects = useMemo(
