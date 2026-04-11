@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { BottomTabs } from "./components/BottomTabs";
 import { EntityEditorModal } from "./components/EntityEditorModal";
 import { FilterControl } from "./components/FilterControl";
@@ -79,6 +79,7 @@ function App() {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [scrollTargetId, setScrollTargetId] = useState<string | null>(null);
+  const [isAddingNote, setIsAddingNote] = useState(false);
   const app = useAppData();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -159,7 +160,19 @@ function App() {
 
   async function handleAddNoteSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
-    await app.addNote();
+    if (isAddingNote) return;
+    setIsAddingNote(true);
+    try {
+      await app.addNote();
+    } finally {
+      setIsAddingNote(false);
+    }
+  }
+
+  function handleAddNotePointerDown(e: PointerEvent<HTMLButtonElement>): void {
+    e.preventDefault();
+    if (isAddingNote) return;
+    e.currentTarget.form?.requestSubmit();
   }
 
   function handleOpenSearch(): void {
@@ -413,7 +426,9 @@ function App() {
               placeholder="Add a note..."
               rows={1}
             />
-            <button type="submit">Add</button>
+            <button type="button" onPointerDown={handleAddNotePointerDown} disabled={isAddingNote}>
+              {isAddingNote ? "Adding..." : "Add"}
+            </button>
           </div>
         </form>
       )}
