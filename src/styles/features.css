@@ -110,6 +110,56 @@
   background: var(--accent);
 }
 
+.goal-metric-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.goal-metric-nav button {
+  min-width: 40px;
+  padding: 4px 8px;
+}
+
+.goal-metric-stack {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.goal-metric-item .entity-summary {
+  margin-bottom: 4px;
+}
+
+.goal-metric-item .bar {
+  margin-bottom: 0;
+}
+
+.project-todo-list {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 7px;
+}
+
+.project-todo-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.project-todo-item input {
+  width: auto;
+}
+
+.project-todo-done {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
 .routine-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -212,6 +262,18 @@
 .is-dimmed .tags,
 .is-dimmed .meta-row {
   color: color-mix(in srgb, var(--muted) 85%, var(--text));
+}
+
+.is-in-progress {
+  border-color: color-mix(in srgb, var(--accent-2) 64%, var(--line));
+  background: color-mix(in srgb, var(--accent-2) 14%, var(--panel));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-2) 35%, transparent);
+}
+
+.is-in-progress .title,
+.is-in-progress .tags,
+.is-in-progress .meta-row {
+  color: color-mix(in srgb, var(--accent-2) 45%, var(--text));
 }
 
 .cards.search-results {

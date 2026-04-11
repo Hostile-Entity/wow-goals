@@ -1,12 +1,18 @@
+import { useRef } from "react";
+
 interface SettingsModalProps {
   showDebugTools: boolean;
   setShowDebugTools(next: boolean): void;
   swVersion: string;
   logicalDay: string;
+  logicalOffset: number;
   isCheckingUpdate: boolean;
   isApplyingUpdate: boolean;
   closeSettingsPopup(): void;
   checkForUpdates(): Promise<void>;
+  exportData(): Promise<void>;
+  importData(file: File): Promise<void>;
+  deleteAllData(): Promise<void>;
   decrementLogicalDay(): Promise<void>;
   incrementLogicalDay(): Promise<void>;
   resetLogicalDayToToday(): Promise<void>;
@@ -18,15 +24,21 @@ export function SettingsModal({
   setShowDebugTools,
   swVersion,
   logicalDay,
+  logicalOffset,
   isCheckingUpdate,
   isApplyingUpdate,
   closeSettingsPopup,
   checkForUpdates,
+  exportData,
+  importData,
+  deleteAllData,
   decrementLogicalDay,
   incrementLogicalDay,
   resetLogicalDayToToday,
   setLogicalDay,
 }: SettingsModalProps) {
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
   return (
     <div className="modal-backdrop" onClick={closeSettingsPopup}>
       <section className="modal" onClick={(e) => e.stopPropagation()}>
@@ -44,10 +56,36 @@ export function SettingsModal({
             <button onClick={() => setShowDebugTools(!showDebugTools)}>{showDebugTools ? "Hide debug tools" : "Debug tools"}</button>
           </div>
         </div>
+        <div className="card">
+          <div className="title">Data Management</div>
+          <div className="tags">Export, import, or reset your app data.</div>
+          <div className="actions">
+            <button onClick={() => void exportData()}>Export data to JSON</button>
+            <button onClick={() => importInputRef.current?.click()}>Import data from JSON</button>
+            <button className="danger" onClick={() => void deleteAllData()}>
+              Delete all data
+            </button>
+          </div>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.currentTarget.files?.[0];
+              if (file) {
+                void importData(file);
+              }
+              e.currentTarget.value = "";
+            }}
+          />
+        </div>
         {showDebugTools && (
           <div className="card">
             <div className="title">Debug Date Control</div>
-            <div className="tags">Logical Day: {logicalDay}</div>
+            <div className="tags">
+              Logical Day: {logicalDay} (offset {logicalOffset >= 0 ? `+${logicalOffset}` : logicalOffset})
+            </div>
             <div className="actions">
               <button onClick={() => void decrementLogicalDay()}>-1 Day</button>
               <button onClick={() => void incrementLogicalDay()}>+1 Day</button>

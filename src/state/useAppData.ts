@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { deleteItem, getAll, getById, putItem, toDayString, toWeekKey, uid } from "../db";
+import { clearStore, deleteItem, getAll, getById, putItem, toDayString, toWeekKey, uid } from "../db";
 import {
   AppSettings,
   AppStateData,
@@ -16,10 +16,10 @@ import {
 
 export type Tab = "notes" | "tasks" | "today" | "projects" | "more";
 export type MoreTab = "routines" | "goals" | "review";
-export type StatusFilter = "all" | "active" | "inactive" | "completed" | "discarded";
+export type StatusFilter = "all" | "in_progress" | "active" | "inactive" | "completed" | "discarded";
 export type FilterKey = "notes" | "tasks" | "projects" | "routines" | "goals";
 export type StatusBucket = Exclude<StatusFilter, "all">;
-export type SortableEntity = { status: "active" | "completed" | "discarded"; updatedAt: string; isActive?: boolean };
+export type SortableEntity = { status: "active" | "in_progress" | "completed" | "discarded"; updatedAt: string; isActive?: boolean };
 export type TaskDraft = {
   title: string;
   description?: string;
@@ -34,16 +34,13 @@ export type ProjectDraft = {
   deadline?: string;
   goalId?: string;
   importance?: number;
-  effort?: number;
   isActive?: boolean;
 };
 export type GoalDraft = {
   title: string;
   description?: string;
-  isActive?: boolean;
-  metricName?: string;
-  metricCurrent?: number;
-  metricTarget?: number;
+  metrics?: GoalMetric[];
+  primaryMetricId?: string;
 };
 export type RoutineDraft = {
   title: string;
@@ -51,18 +48,28 @@ export type RoutineDraft = {
   goalId?: string;
 };
 
-const emptySettings: AppSettings = { id: "settings", logicalDate: toDayString() };
+const emptySettings: AppSettings = { id: "settings", dayOffset: 0 };
+const dataStores = ["notes", "tasks", "projects", "goals", "routines", "completions", "reviews", "logs"] as const;
+
+type BackupPayload = {
+  app: "wow-goals";
+  schemaVersion: number;
+  exportedAt: string;
+  data: AppStateData;
+};
 
 const nowIso = () => new Date().toISOString();
 
 const statusRank: Record<StatusBucket, number> = {
-  active: 0,
-  inactive: 1,
-  completed: 2,
-  discarded: 3,
+  in_progress: 0,
+  active: 1,
+  inactive: 2,
+  completed: 3,
+  discarded: 4,
 };
 
 export function getStatusBucket(item: SortableEntity): StatusBucket {
+  if (item.status === "in_progress") return "in_progress";
   if (item.status === "discarded") return "discarded";
   if (item.status === "completed") return "completed";
   if (item.isActive === false) return "inactive";
@@ -98,10 +105,30 @@ function nextDay(day: string): string {
   return toDayString(d.toISOString());
 }
 
-function prevDay(day: string): string {
-  const d = new Date(`${day}T00:00:00`);
-  d.setDate(d.getDate() - 1);
+function dayDiff(baseDay: string, targetDay: string): number {
+  const base = new Date(`${baseDay}T00:00:00`);
+  const target = new Date(`${targetDay}T00:00:00`);
+  if (Number.isNaN(base.getTime()) || Number.isNaN(target.getTime())) return 0;
+  return Math.round((target.getTime() - base.getTime()) / 86400000);
+}
+
+function toLogicalDay(offset: number, nowMs: number): string {
+  const d = new Date(nowMs);
+  d.setDate(d.getDate() + offset);
   return toDayString(d.toISOString());
+}
+
+function normalizeSettings(raw: unknown): AppSettings {
+  if (raw && typeof raw === "object" && "id" in raw && (raw as { id?: string }).id === "settings") {
+    const row = raw as { dayOffset?: unknown; logicalDate?: unknown };
+    if (typeof row.dayOffset === "number" && Number.isFinite(row.dayOffset)) {
+      return { id: "settings", dayOffset: Math.trunc(row.dayOffset) };
+    }
+    if (typeof row.logicalDate === "string") {
+      return { id: "settings", dayOffset: dayDiff(toDayString(), row.logicalDate) };
+    }
+  }
+  return emptySettings;
 }
 
 export function useAppData() {
@@ -134,15 +161,18 @@ export function useAppData() {
     goals: "all",
   });
   const [openFilterMenu, setOpenFilterMenu] = useState<FilterKey | null>(null);
+  const [clockNowMs, setClockNowMs] = useState(() => Date.now());
   const noteTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const noteComposerRef = useRef<HTMLFormElement | null>(null);
 
-  const logicalDay = state.settings.logicalDate;
+  const logicalOffset = state.settings.dayOffset;
+  const logicalDay = toLogicalDay(logicalOffset, clockNowMs);
 
   async function reloadAll(): Promise<void> {
     const settings = await getById("settings", "settings");
-    if (!settings) {
-      await putItem("settings", emptySettings);
+    const normalizedSettings = normalizeSettings(settings);
+    if (!settings || JSON.stringify(settings) !== JSON.stringify(normalizedSettings)) {
+      await putItem("settings", normalizedSettings);
     }
     const [notes, tasks, projects, goals, routines, completions, reviews, logs, updatedSettings] = await Promise.all([
       getAll("notes"),
@@ -164,13 +194,20 @@ export function useAppData() {
       completions,
       reviews,
       logs: logs.sort((a, b) => b.at.localeCompare(a.at)),
-      settings: updatedSettings ?? emptySettings,
+      settings: normalizeSettings(updatedSettings),
     });
     setLoaded(true);
   }
 
   useEffect(() => {
     void reloadAll();
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setClockNowMs(Date.now());
+    }, 30000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -568,32 +605,32 @@ export function useAppData() {
   }
 
   async function triageNote(note: Note, to: Exclude<EntityType, "note">): Promise<void> {
-    const title = window.prompt("Title", note.title)?.trim() || note.title;
+    const title = note.title;
+    const description = note.description ?? "";
+
     if (to === "task") {
-      const deadline = window.prompt("Deadline YYYY-MM-DD (optional)", logicalDay)?.trim();
       const task: Task = {
         ...makeBase(title),
+        description,
         priority: state.tasks.length + 1,
         postponedCount: 0,
-        deadline: deadline || undefined,
       };
       await putItem("tasks", task);
     }
     if (to === "project") {
-      const deadline = window.prompt("Deadline YYYY-MM-DD (optional)", "")?.trim();
       const project: Project = {
         ...makeBase(title),
+        description,
         isActive: true,
-        effort: 3,
         importance: 3,
-        deadline: deadline || undefined,
       };
       await putItem("projects", project);
     }
     if (to === "goal") {
-      const target = Number(window.prompt("Metric target", "10") || "10");
+      const target = 10;
       const goal: Goal = {
         ...makeBase(title),
+        description,
         isActive: true,
         metricName: "Progress",
         metricCurrent: 0,
@@ -605,6 +642,7 @@ export function useAppData() {
     if (to === "routine") {
       const routine: Routine = {
         ...makeBase(title),
+        description,
         cadence: "daily",
       };
       await putItem("routines", routine);
@@ -683,7 +721,6 @@ export function useAppData() {
       ...makeBase(title),
       description: draft.description?.trim() ?? "",
       isActive: draft.isActive ?? true,
-      effort: draft.effort ?? 3,
       importance: draft.importance ?? 3,
       deadline: draft.deadline || undefined,
       goalId: draft.goalId || undefined,
@@ -702,17 +739,26 @@ export function useAppData() {
   async function createGoal(draft: GoalDraft): Promise<void> {
     const title = draft.title.trim();
     if (!title) return;
-    const metricName = draft.metricName?.trim() || "Progress";
-    const metricCurrent = draft.metricCurrent ?? 0;
-    const metricTarget = draft.metricTarget ?? 10;
+    const sourceMetrics = draft.metrics ?? [];
+    const metrics =
+      sourceMetrics.length > 0
+        ? sourceMetrics.map((metric) => ({
+            id: metric.id || uid("metric"),
+            name: metric.name.trim() || "Metric",
+            current: Number.isFinite(metric.current) ? metric.current : 0,
+            target: Number.isFinite(metric.target) ? metric.target : 10,
+          }))
+        : [{ id: uid("metric"), name: "Progress", current: 0, target: 10 }];
+    const primaryMetric = metrics.find((metric) => metric.id === draft.primaryMetricId) ?? metrics[0];
     const goal: Goal = {
       ...makeBase(title),
       description: draft.description?.trim() ?? "",
-      isActive: draft.isActive ?? true,
-      metricName,
-      metricCurrent,
-      metricTarget,
-      metrics: [{ id: uid("metric"), name: metricName, current: metricCurrent, target: metricTarget }],
+      isActive: true,
+      metricName: primaryMetric.name,
+      metricCurrent: primaryMetric.current,
+      metricTarget: primaryMetric.target,
+      metrics,
+      primaryMetricId: primaryMetric.id,
     };
     await putItem("goals", goal);
     await logEvent("create", "goal", goal.id, "Added goal");
@@ -789,21 +835,102 @@ export function useAppData() {
   }
 
   async function setLogicalDay(day: string): Promise<void> {
-    await putItem("settings", { id: "settings", logicalDate: day });
-    await logEvent("debug-date", "settings", "settings", `Logical day set to ${day}`);
+    const offset = dayDiff(toDayString(), day);
+    await putItem("settings", { id: "settings", dayOffset: offset });
+    await logEvent("debug-date", "settings", "settings", `Logical day offset set to ${offset} (${day})`);
     await reloadAll();
   }
 
   async function decrementLogicalDay(): Promise<void> {
-    await setLogicalDay(prevDay(logicalDay));
+    const nextOffset = logicalOffset - 1;
+    await putItem("settings", { id: "settings", dayOffset: nextOffset });
+    await logEvent("debug-date", "settings", "settings", `Logical day offset changed to ${nextOffset}`);
+    await reloadAll();
   }
 
   async function incrementLogicalDay(): Promise<void> {
-    await setLogicalDay(nextDay(logicalDay));
+    const nextOffset = logicalOffset + 1;
+    await putItem("settings", { id: "settings", dayOffset: nextOffset });
+    await logEvent("debug-date", "settings", "settings", `Logical day offset changed to ${nextOffset}`);
+    await reloadAll();
   }
 
   async function resetLogicalDayToToday(): Promise<void> {
-    await setLogicalDay(toDayString());
+    await putItem("settings", { id: "settings", dayOffset: 0 });
+    await logEvent("debug-date", "settings", "settings", "Logical day offset reset to 0");
+    await reloadAll();
+  }
+
+  async function exportData(): Promise<void> {
+    const payload: BackupPayload = {
+      app: "wow-goals",
+      schemaVersion: 1,
+      exportedAt: nowIso(),
+      data: state,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const day = toDayString();
+    a.href = url;
+    a.download = `wow-goals-backup-${day}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importData(file: File): Promise<void> {
+    const shouldReplace = window.confirm("Import will replace all existing app data. Continue?");
+    if (!shouldReplace) return;
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Partial<BackupPayload>;
+      const data = parsed?.data as Partial<AppStateData> | undefined;
+      if (!data) {
+        throw new Error("Backup file is missing data payload.");
+      }
+
+      const next: AppStateData = {
+        notes: Array.isArray(data.notes) ? data.notes : [],
+        tasks: Array.isArray(data.tasks) ? data.tasks : [],
+        projects: Array.isArray(data.projects) ? data.projects : [],
+        goals: Array.isArray(data.goals) ? data.goals : [],
+        routines: Array.isArray(data.routines) ? data.routines : [],
+        completions: Array.isArray(data.completions) ? data.completions : [],
+        reviews: Array.isArray(data.reviews) ? data.reviews : [],
+        logs: Array.isArray(data.logs) ? data.logs : [],
+        settings: normalizeSettings(data.settings),
+      };
+
+      await Promise.all([...dataStores.map((store) => clearStore(store)), clearStore("settings")]);
+
+      await Promise.all(
+        dataStores.map(async (store) => {
+          const rows = next[store];
+          for (const row of rows as any[]) {
+            await putItem(store, row);
+          }
+        }),
+      );
+      await putItem("settings", next.settings);
+      await reloadAll();
+      window.alert("Import completed.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not import backup file.";
+      window.alert(`Import failed: ${msg}`);
+    }
+  }
+
+  async function deleteAllData(): Promise<void> {
+    const ok = window.confirm("Delete ALL app data, including settings and logs? This cannot be undone.");
+    if (!ok) return;
+
+    await Promise.all([...dataStores.map((store) => clearStore(store)), clearStore("settings")]);
+    await putItem("settings", emptySettings);
+    setFilters({ notes: "all", tasks: "all", projects: "all", routines: "all", goals: "all" });
+    setOpenFilterMenu(null);
+    await reloadAll();
+    window.alert("All data has been deleted.");
   }
 
   function closeSettingsPopup(): void {
@@ -814,7 +941,7 @@ export function useAppData() {
   const activeTasks = useMemo(
     () =>
       state.tasks
-        .filter((t) => t.status === "active")
+        .filter((t) => t.status === "active" || t.status === "in_progress")
         .sort((a, b) => a.priority - b.priority || (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999")),
     [state.tasks],
   );
@@ -837,7 +964,7 @@ export function useAppData() {
   const routinesTodayCount = state.completions.filter((c) => c.date === logicalDay && c.entityType === "routine").length;
 
   function statusLabel(item: SortableEntity): string {
-    return getStatusBucket(item);
+    return getStatusBucket(item).replace("_", " ");
   }
 
   return {
@@ -863,6 +990,7 @@ export function useAppData() {
     setOpenFilterMenu,
     noteTextareaRef,
     noteComposerRef,
+    logicalOffset,
     logicalDay,
     activeTasks,
     todayTop3,
@@ -876,6 +1004,9 @@ export function useAppData() {
     completedTodayCount,
     routinesTodayCount,
     checkForUpdates,
+    exportData,
+    importData,
+    deleteAllData,
     closeSettingsPopup,
     setLogicalDay,
     decrementLogicalDay,

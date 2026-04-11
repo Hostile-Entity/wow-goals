@@ -171,3 +171,10 @@ export async function deleteItem<K extends StoreName>(store: K, id: string): Pro
   tx.objectStore(store).delete(id);
   await txDone(tx);
 }
+
+export async function clearStore<K extends StoreName>(store: K): Promise<void> {
+  const db = await openDb();
+  const tx = db.transaction(store, "readwrite");
+  tx.objectStore(store).clear();
+  await txDone(tx);
+}
