@@ -58,7 +58,6 @@ export function ProjectsTab({ filteredProjects, goals, statusLabel, onToggleTodo
                       </label>
                     ))}
                   </div>
-                  {undoneTodo.length === 0 ? <div className="meta-row entity-summary">All TODOs completed</div> : null}
                   {undoneTodo.length > visibleUndoneTodo.length ? (
                     <div className="meta-row entity-summary">Showing first {visibleUndoneTodo.length} undone items</div>
                   ) : null}

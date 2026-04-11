@@ -26,7 +26,7 @@ export function TodayTab({
   completeRoutine,
 }: TodayTabProps) {
   return (
-    <section>
+    <section className="today-tab">
       <h2>Today</h2>
       <div className="stats">
         <div className="stat">

@@ -53,20 +53,73 @@ export function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}${Date.now().toString(36)}`;
 }
 
-export function toDayString(iso?: string): string {
-  const d = iso ? new Date(iso) : new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
+function dayStringFromDate(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
 
+export function toDayString(iso?: string, dayStartHour = 0): string {
+  const d = iso ? new Date(iso) : new Date();
+  if (Number.isNaN(d.getTime())) return dayStringFromDate(new Date());
+  if (dayStartHour > 0 && d.getHours() < dayStartHour) {
+    d.setDate(d.getDate() - 1);
+  }
+  return dayStringFromDate(d);
+}
+
+export function addDays(day: string, delta: number): string {
+  const d = new Date(`${day}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return day;
+  d.setDate(d.getDate() + delta);
+  return dayStringFromDate(d);
+}
+
+export function startOfWeek(day: string): string {
+  const d = new Date(`${day}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return day;
+  const mondayIndex = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - mondayIndex);
+  return dayStringFromDate(d);
+}
+
+export function weekKeyToStartDay(weekKey: string): string {
+  const match = weekKey.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return toDayString();
+  const isoYear = Number(match[1]);
+  const isoWeek = Number(match[2]);
+
+  const jan4 = new Date(isoYear, 0, 4, 12, 0, 0, 0);
+  const week1Start = startOfWeek(dayStringFromDate(jan4));
+  return addDays(week1Start, (isoWeek - 1) * 7);
+}
+
+export function getWeekDays(weekKey: string): string[] {
+  const start = weekKeyToStartDay(weekKey);
+  return Array.from({ length: 7 }, (_, idx) => addDays(start, idx));
+}
+
+export function formatWeekLabel(weekKey: string): string {
+  const match = weekKey.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return weekKey;
+  return `${match[1]} W${match[2]}`;
+}
+
 export function toWeekKey(day: string): string {
-  const d = new Date(`${day}T00:00:00`);
-  const first = new Date(d.getFullYear(), 0, 1);
-  const days = Math.floor((d.getTime() - first.getTime()) / 86400000);
-  const week = Math.ceil((days + first.getDay() + 1) / 7);
-  return `${d.getFullYear()}-W${String(week).padStart(2, "0")}`;
+  const date = new Date(`${day}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return `${new Date().getFullYear()}-W01`;
+
+  const weekday = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - weekday + 3);
+  const isoYear = date.getFullYear();
+
+  const firstThursday = new Date(isoYear, 0, 4, 12, 0, 0, 0);
+  const firstWeekday = (firstThursday.getDay() + 6) % 7;
+  firstThursday.setDate(firstThursday.getDate() - firstWeekday + 3);
+
+  const week = 1 + Math.round((date.getTime() - firstThursday.getTime()) / 604800000);
+  return `${isoYear}-W${String(week).padStart(2, "0")}`;
 }
 
 function ensureStores(db: IDBDatabase): void {

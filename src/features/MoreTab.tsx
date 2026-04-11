@@ -1,5 +1,6 @@
-import { FormEvent, ReactNode } from "react";
+import { ReactNode } from "react";
 import { AppData, FilterKey, MoreTab as MoreTabId, getStatusBucket } from "../state/useAppData";
+import { ReviewTab } from "./ReviewTab";
 import { Goal, GoalMetric, Routine } from "../types";
 
 interface MoreTabProps {
@@ -11,13 +12,24 @@ interface MoreTabProps {
   projects: AppData["state"]["projects"];
   tasks: AppData["state"]["tasks"];
   routines: AppData["state"]["routines"];
+  completions: AppData["state"]["completions"];
   reviews: AppData["state"]["reviews"];
   logs: AppData["state"]["logs"];
+  logicalDay: AppData["logicalDay"];
+  dayStartHour: AppData["dayStartHour"];
   statusLabel: AppData["statusLabel"];
   onCreateRoutine(): void;
   onCreateGoal(): void;
   primaryMetric: AppData["primaryMetric"];
-  saveWeeklyReview(form: FormData): Promise<void>;
+  saveWeeklyReview(input: {
+    weekKey: string;
+    goalsChecked: boolean;
+    inboxCleared: boolean;
+    tasksPrioritized: boolean;
+    weekPlanned: boolean;
+    note: string;
+  }): Promise<void>;
+  toggleRoutineCompletionForDay(routineId: string, day: string): Promise<void>;
   renderFilterControl(key: FilterKey): ReactNode;
   onManageRoutine(routine: Routine): void;
   onManageGoal(goal: Goal): void;
@@ -33,33 +45,30 @@ export function MoreTab({
   projects,
   tasks,
   routines,
+  completions,
   reviews,
   logs,
+  logicalDay,
+  dayStartHour,
   statusLabel,
   onCreateRoutine,
   onCreateGoal,
   primaryMetric,
   saveWeeklyReview,
+  toggleRoutineCompletionForDay,
   renderFilterControl,
   onManageRoutine,
   onManageGoal,
   formatDateTime,
 }: MoreTabProps) {
-  async function handleSaveWeeklyReview(e: FormEvent<HTMLFormElement>): Promise<void> {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    await saveWeeklyReview(form);
-    e.currentTarget.reset();
-  }
-
   return (
     <section>
       <h2>More</h2>
       <div className="more-tabs">
         {[
-          ["routines", "Routines"],
-          ["goals", "Goals"],
           ["review", "Review"],
+          ["goals", "Goals"],
+          ["routines", "Routines"],
         ].map(([id, label]) => (
           <button key={id} className={moreTab === id ? "active" : ""} onClick={() => setMoreTab(id as MoreTabId)}>
             {label}
@@ -68,12 +77,9 @@ export function MoreTab({
       </div>
       {moreTab === "routines" && (
         <>
-          <div className="section-subhead">
-            <h3>Routines</h3>
-            {renderFilterControl("routines")}
-          </div>
-          <div className="actions">
+          <div className="section-subhead sticky-head">
             <button onClick={onCreateRoutine}>+ Routine</button>
+            {renderFilterControl("routines")}
           </div>
           <div className="cards">
             {filteredRoutines.map((routine) => {
@@ -106,12 +112,9 @@ export function MoreTab({
 
       {moreTab === "goals" && (
         <>
-          <div className="section-subhead">
-            <h3>Goals</h3>
-            {renderFilterControl("goals")}
-          </div>
-          <div className="actions">
+          <div className="section-subhead sticky-head">
             <button onClick={onCreateGoal}>+ Goal</button>
+            {renderFilterControl("goals")}
           </div>
           <div className="cards">
             {filteredGoals.map((goal) => {
@@ -173,48 +176,17 @@ export function MoreTab({
       {moreTab === "review" && (
         <>
           <h3>Weekly Review</h3>
-          <form className="checklist" onSubmit={handleSaveWeeklyReview}>
-            <label>
-              <input type="checkbox" name="inboxCleared" /> Inbox cleaned
-            </label>
-            <label>
-              <input type="checkbox" name="tasksPrioritized" /> Tasks prioritized
-            </label>
-            <label>
-              <input type="checkbox" name="weekPlanned" /> Week planned
-            </label>
-            <label>
-              <input type="checkbox" name="goalsChecked" /> Goals reviewed
-            </label>
-            <textarea name="note" placeholder="What changed this week?" />
-            <button type="submit">Save Weekly Review</button>
-          </form>
-          <h3>Review History</h3>
-          <div className="cards">
-            {reviews
-              .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-              .map((review) => (
-                <article key={review.id} className="card">
-                  <div className="title">{review.weekKey}</div>
-                  <div className="tags">
-                    inbox:{String(review.inboxCleared)} | tasks:{String(review.tasksPrioritized)} | plan:{String(review.weekPlanned)}
-                  </div>
-                  <div>{review.note || "No note"}</div>
-                </article>
-              ))}
-          </div>
-          <h3>Event Log</h3>
-          <div className="cards">
-            {logs.map((log) => (
-              <article key={log.id} className="card log">
-                <div className="title">{log.action}</div>
-                <div className="tags">
-                  {log.at.slice(0, 19).replace("T", " ")} | {log.entityType} {log.entityId ?? ""}
-                </div>
-                <div>{log.detail}</div>
-              </article>
-            ))}
-          </div>
+          <ReviewTab
+            logicalDay={logicalDay}
+            dayStartHour={dayStartHour}
+            projects={projects}
+            routines={routines}
+            completions={completions}
+            reviews={reviews}
+            logs={logs}
+            saveWeeklyReview={saveWeeklyReview}
+            toggleRoutineCompletionForDay={toggleRoutineCompletionForDay}
+          />
         </>
       )}
     </section>

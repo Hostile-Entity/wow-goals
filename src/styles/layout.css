@@ -16,7 +16,7 @@
 }
 
 .main {
-  padding: 12px;
+  padding: 0 12px 12px;
   display: grid;
   gap: 12px;
   overflow-y: auto;
@@ -44,6 +44,47 @@
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+}
+
+.sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  min-height: 40px;
+  padding: 4px 12px;
+  margin: 0 -12px 8px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  border-radius: 0;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg) 95%, transparent) 0%,
+    color-mix(in srgb, var(--bg) 86%, transparent) 100%
+  );
+  backdrop-filter: blur(8px);
+  box-shadow: 0 8px 14px rgba(3, 8, 12, 0.25);
+}
+
+.sticky-head > h2,
+.sticky-head > h3 {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.1;
+}
+
+.sticky-head > button {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
+}
+
+.section-head .filter-wrap,
+.section-subhead .filter-wrap {
+  margin-top: 0;
+}
+
+.sticky-head .filter-wrap {
+  display: flex;
+  align-items: center;
 }
 
 h1,

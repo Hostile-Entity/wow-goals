@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { BottomTabs } from "./components/BottomTabs";
 import { EntityEditorModal } from "./components/EntityEditorModal";
 import { FilterControl } from "./components/FilterControl";
@@ -79,6 +79,8 @@ function App() {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [scrollTargetId, setScrollTargetId] = useState<string | null>(null);
+  const [isAddingNote, setIsAddingNote] = useState(false);
+  const [isLogView, setIsLogView] = useState(() => typeof window !== "undefined" && window.location.hash === "#/logs");
   const app = useAppData();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -90,6 +92,12 @@ function App() {
     editor?.type === "routine" && editor.id ? app.state.routines.find((r) => r.id === editor.id) : undefined;
   const selectedGoal = editor?.type === "goal" && editor.id ? app.state.goals.find((g) => g.id === editor.id) : undefined;
   const searchResults = useMemo(() => buildSearchResults(app, searchQuery), [app, searchQuery]);
+
+  useEffect(() => {
+    const handleHashChange = () => setIsLogView(window.location.hash === "#/logs");
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
 
   useEffect(() => {
     if (!isSearchMode) return;
@@ -159,7 +167,19 @@ function App() {
 
   async function handleAddNoteSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
-    await app.addNote();
+    if (isAddingNote) return;
+    setIsAddingNote(true);
+    try {
+      await app.addNote();
+    } finally {
+      setIsAddingNote(false);
+    }
+  }
+
+  function handleAddNotePointerDown(e: PointerEvent<HTMLButtonElement>): void {
+    e.preventDefault();
+    if (isAddingNote) return;
+    e.currentTarget.form?.requestSubmit();
   }
 
   function handleOpenSearch(): void {
@@ -219,21 +239,15 @@ function App() {
     await app.createProject(input);
   }
 
-  async function handleToggleProjectTodo(projectId: string, lineIndex: number, checked: boolean): Promise<void> {
-    await app.updateEntity("project", projectId, (project) => {
-      const sourceDescription = `${String(project.description ?? "")}${project.todo ? `\n${String(project.todo)}` : ""}`.trim();
-      const lines = sourceDescription
-        .split("\n")
-        .map((line: string) => line.trim())
-        .filter((line: string) => line.length > 0);
-      const rawLine = lines[lineIndex];
-      if (!rawLine) return project;
+  function handleOpenCompleteLog(): void {
+    const url = new URL(window.location.href);
+    url.hash = "/logs";
+    window.open(url.toString(), "_blank", "noopener,noreferrer");
+  }
 
-      const text = rawLine.replace(/^\[(x|X|\s)\]\s+/, "").trim();
-      const prefix = checked ? "[x] " : "[ ] ";
-      lines[lineIndex] = `${prefix}${text}`;
-      return { ...project, description: lines.join("\n") };
-    });
+  function handleCloseLogView(): void {
+    window.close();
+    window.location.hash = "";
   }
 
   async function handleSaveGoal(input: Parameters<typeof app.createGoal>[0]): Promise<void> {
@@ -282,6 +296,30 @@ function App() {
 
   if (!app.loaded) return <div className="loading">Loading control deck...</div>;
 
+  if (isLogView) {
+    return (
+      <div className="log-view-page">
+        <section className="log-view-shell">
+          <div className="card-top">
+            <h2>Complete Log</h2>
+            <button onClick={handleCloseLogView}>Close</button>
+          </div>
+          <div className="cards">
+            {app.state.logs.map((log) => (
+              <article key={log.id} className="card log">
+                <div className="title">{log.action}</div>
+                <div className="tags">
+                  {log.at.slice(0, 19).replace("T", " ")} | {log.entityType} {log.entityId ?? ""}
+                </div>
+                <div>{log.detail}</div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`app ${app.tab === "notes" && !isSearchMode ? "notes-mode" : ""} ${app.tab === "notes" && app.isKeyboardVisible ? "keyboard-open" : ""} ${isSearchMode ? "search-mode" : ""}`}
@@ -306,7 +344,7 @@ function App() {
           <main className="main">
             {app.tab === "notes" && (
               <section>
-                <div className="section-head">
+                <div className="section-head sticky-head">
                   <h2>Capture &amp; Triage</h2>
                   {renderFilterControl("notes")}
                 </div>
@@ -321,12 +359,9 @@ function App() {
 
             {app.tab === "tasks" && (
               <section>
-                <div className="section-head">
-                  <h2>Prioritized Tasks</h2>
-                  {renderFilterControl("tasks")}
-                </div>
-                <div className="actions">
+                <div className="section-head sticky-head">
                   <button onClick={() => setEditor({ mode: "create", type: "task" })}>+ Task</button>
+                  {renderFilterControl("tasks")}
                 </div>
                 <TasksTab
                   filteredTasks={app.filteredTasks}
@@ -364,13 +399,17 @@ function App() {
                 projects={app.state.projects}
                 tasks={app.state.tasks}
                 routines={app.state.routines}
+                completions={app.state.completions}
                 reviews={app.state.reviews}
                 logs={app.state.logs}
+                logicalDay={app.logicalDay}
+                dayStartHour={app.dayStartHour}
                 statusLabel={app.statusLabel}
                 onCreateRoutine={() => setEditor({ mode: "create", type: "routine" })}
                 onCreateGoal={() => setEditor({ mode: "create", type: "goal" })}
                 primaryMetric={app.primaryMetric}
                 saveWeeklyReview={app.saveWeeklyReview}
+                toggleRoutineCompletionForDay={app.toggleRoutineCompletionForDay}
                 renderFilterControl={renderFilterControl}
                 formatDateTime={formatDateTime}
                 onManageRoutine={(routine) => setEditor({ mode: "edit", type: "routine", id: routine.id })}
@@ -380,19 +419,16 @@ function App() {
 
             {app.tab === "projects" && (
               <section>
-                <div className="section-head">
-                  <h2>Projects</h2>
-                  {renderFilterControl("projects")}
-                </div>
-                <div className="actions">
+                <div className="section-head sticky-head">
                   <button onClick={() => setEditor({ mode: "create", type: "project" })}>+ Project</button>
+                  {renderFilterControl("projects")}
                 </div>
                 <ProjectsTab
                   filteredProjects={app.filteredProjects}
                   goals={app.state.goals}
                   statusLabel={app.statusLabel}
                   onToggleTodo={(projectId, lineIndex, checked) => {
-                    void handleToggleProjectTodo(projectId, lineIndex, checked);
+                    void app.toggleProjectTodo(projectId, lineIndex, checked);
                   }}
                   formatDateTime={formatDateTime}
                   onManage={(project) => setEditor({ mode: "edit", type: "project", id: project.id })}
@@ -413,7 +449,9 @@ function App() {
               placeholder="Add a note..."
               rows={1}
             />
-            <button type="submit">Add</button>
+            <button type="button" onPointerDown={handleAddNotePointerDown} disabled={isAddingNote}>
+              {isAddingNote ? "Adding..." : "Add"}
+            </button>
           </div>
         </form>
       )}
@@ -425,6 +463,7 @@ function App() {
           swVersion={app.swVersion}
           logicalDay={app.logicalDay}
           logicalOffset={app.logicalOffset}
+          dayStartHour={app.dayStartHour}
           isCheckingUpdate={app.isCheckingUpdate}
           isApplyingUpdate={app.isApplyingUpdate}
           closeSettingsPopup={app.closeSettingsPopup}
@@ -436,6 +475,8 @@ function App() {
           incrementLogicalDay={app.incrementLogicalDay}
           resetLogicalDayToToday={app.resetLogicalDayToToday}
           setLogicalDay={app.setLogicalDay}
+          setDayStartHour={app.setDayStartHour}
+          openCompleteLog={handleOpenCompleteLog}
         />
       )}
 
