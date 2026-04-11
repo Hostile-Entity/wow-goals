@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { AppData, getStatusBucket } from "../state/useAppData";
 import { Project } from "../types";
 
@@ -18,6 +19,8 @@ function parseTodoLine(line: string): { checked: boolean; text: string } {
 }
 
 export function ProjectsTab({ filteredProjects, goals, statusLabel, onToggleTodo, onManage, formatDateTime }: ProjectsTabProps) {
+  const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal.title])), [goals]);
+
   return (
     <div className="cards">
       {filteredProjects.map((project) => {
@@ -39,7 +42,7 @@ export function ProjectsTab({ filteredProjects, goals, statusLabel, onToggleTodo
             <div className="entity-main">
               <div className="title entity-title">{project.title}</div>
               <div className="tags entity-summary">
-                {project.goalId ? `goal ${goals.find((g) => g.id === project.goalId)?.title ?? "Unknown"}` : "No goal linked"}
+                {project.goalId ? `goal ${goalById.get(project.goalId) ?? "Unknown"}` : "No goal linked"}
               </div>
               {parsedTodo.length > 0 ? (
                 <>

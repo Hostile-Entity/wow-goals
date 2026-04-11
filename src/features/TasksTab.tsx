@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { AppData, getStatusBucket } from "../state/useAppData";
 import { Task } from "../types";
 
@@ -11,6 +12,9 @@ interface TasksTabProps {
 }
 
 export function TasksTab({ filteredTasks, goals, projects, statusLabel, onManage, formatDateTime }: TasksTabProps) {
+  const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal.title])), [goals]);
+  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project.title])), [projects]);
+
   return (
     <div className="cards">
       {filteredTasks.map((task) => {
@@ -23,8 +27,8 @@ export function TasksTab({ filteredTasks, goals, projects, statusLabel, onManage
               <div className="title entity-title">{task.title}</div>
               <div className="tags entity-summary">
                 {task.deadline ? `due ${task.deadline} | ` : ""}postponed {task.postponedCount}
-                {task.goalId ? ` | goal ${goals.find((g) => g.id === task.goalId)?.title ?? "Unknown"}` : ""}
-                {task.projectId ? ` | project ${projects.find((p) => p.id === task.projectId)?.title ?? "Unknown"}` : ""}
+                {task.goalId ? ` | goal ${goalById.get(task.goalId) ?? "Unknown"}` : ""}
+                {task.projectId ? ` | project ${projectById.get(task.projectId) ?? "Unknown"}` : ""}
               </div>
               <div className="tags entity-status">{statusLabel(task)}</div>
             </div>

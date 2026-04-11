@@ -226,6 +226,22 @@
   margin-bottom: 0;
 }
 
+.notes-virtual-wrap {
+  gap: 0;
+}
+
+.notes-virtual-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  padding-bottom: 8px;
+}
+
+.notes-virtual-meta {
+  margin-top: 4px;
+}
+
 .entity-card {
   display: flex;
   justify-content: space-between;
