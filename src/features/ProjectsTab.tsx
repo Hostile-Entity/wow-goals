@@ -69,7 +69,9 @@ export function ProjectsTab({ filteredProjects, goals, statusLabel, onToggleTodo
               <div className="tags entity-status">{statusLabel(project)}</div>
             </div>
             <div className="entity-side">
-              <button onClick={() => onManage(project)}>Manage</button>
+              <button className="manage-btn" onClick={() => onManage(project)}>
+                Manage
+              </button>
               <div className="meta-row entity-meta-time">
                 {project.createdAt === project.updatedAt
                   ? `Created ${formatDateTime(project.createdAt)}`

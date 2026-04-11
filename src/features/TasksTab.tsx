@@ -33,7 +33,9 @@ export function TasksTab({ filteredTasks, goals, projects, statusLabel, onManage
               <div className="tags entity-status">{statusLabel(task)}</div>
             </div>
             <div className="entity-side">
-              <button onClick={() => onManage(task)}>Manage</button>
+              <button className="manage-btn" onClick={() => onManage(task)}>
+                Manage
+              </button>
               <div className="meta-row entity-meta-time">
                 {task.createdAt === task.updatedAt
                   ? `Created ${formatDateTime(task.createdAt)}`

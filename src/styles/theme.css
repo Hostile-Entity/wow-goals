@@ -1,15 +1,32 @@
 :root {
-  --bg: #0c141d;
-  --panel: #15222c;
-  --panel-alt: #1b2b36;
-  --text: #d5e8ef;
-  --muted: #8ca8b3;
-  --accent: #2ec4b6;
-  --accent-2: #ffd166;
-  --danger: #e76f51;
-  --ok: #4caf7a;
-  --line: #1f2f39;
-  --radius: 10px;
+  --wow-bg: #05070b;
+  --wow-bg-mid: #101520;
+  --wow-bg-top: #181f30;
+  --wow-panel: #141823;
+  --wow-panel-inner: #0c1018;
+  --wow-border: #c89b3c;
+  --wow-border-soft: #7a5b24;
+  --wow-border-blue: #3d6ea8;
+  --wow-gold: #f7d87b;
+  --wow-gold-soft: #d3b167;
+  --wow-text: #f5f3e7;
+  --wow-text-muted: #c3b79b;
+  --wow-red: #ff4a4a;
+  --wow-green: #1eff00;
+  --wow-shadow-strong: 0 0 18px rgba(0, 0, 0, 0.95);
+  --wow-font: Verdana, "Open Sans", Arial, "Helvetica Neue", Helvetica, sans-serif;
+
+  --bg: var(--wow-bg);
+  --panel: var(--wow-panel);
+  --panel-alt: var(--wow-panel-inner);
+  --text: var(--wow-text);
+  --muted: var(--wow-text-muted);
+  --accent: var(--wow-green);
+  --accent-2: var(--wow-gold);
+  --danger: var(--wow-red);
+  --ok: var(--wow-green);
+  --line: var(--wow-border-soft);
+  --radius: 9px;
   --tabs-height: 62px;
   --notes-composer-height: 60px;
   --notes-composer-live-height: 60px;
@@ -27,9 +44,11 @@ body,
 
 body {
   margin: 0;
-  font-family: "Space Grotesk", "Manrope", sans-serif;
+  font-family: var(--wow-font);
   color: var(--text);
-  background: var(--bg);
+  background:
+    radial-gradient(circle at top, #27344e 0, rgba(8, 9, 14, 0.9) 55%, #020308 100%),
+    radial-gradient(circle at bottom, #1d1010 0, transparent 60%);
   overflow: hidden;
 }
 
@@ -38,6 +57,7 @@ textarea,
 select,
 button {
   font: inherit;
+  font-family: var(--wow-font);
   color: var(--text);
 }
 
@@ -56,22 +76,30 @@ textarea {
 }
 
 button {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  border-radius: 9px;
+  color: var(--wow-text-muted);
+  border: 1px solid var(--wow-border-soft);
+  background: radial-gradient(circle at top, rgba(83, 115, 168, 0.15) 0, transparent 60%), linear-gradient(180deg, #171d2a 0%, #0a0f17 100%);
+  border-radius: 7px;
   padding: 6px 9px;
   cursor: pointer;
-  transition: transform 120ms ease, background 150ms ease;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.9), inset 0 0 2px rgba(255, 255, 255, 0.1);
+  transition: transform 100ms ease, border-color 150ms ease, color 150ms ease;
 }
 
 button:hover {
   transform: translateY(-1px);
-  background: #17252f;
+  border-color: var(--wow-gold-soft);
+  color: var(--wow-gold);
 }
 
 button.active,
 button.ok {
-  background: color-mix(in srgb, var(--accent) 38%, var(--panel));
+  background:
+    radial-gradient(circle at top, rgba(89, 132, 192, 0.45) 0, transparent 60%),
+    linear-gradient(180deg, #1a2233 0, #070910 100%);
+  color: var(--wow-gold);
+  border-color: var(--wow-gold-soft);
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.7), 0 0 9px rgba(93, 151, 255, 0.55);
 }
 
 button:disabled {
@@ -81,7 +109,29 @@ button:disabled {
 }
 
 button.danger {
-  border-color: color-mix(in srgb, var(--danger) 35%, var(--line));
+  border-color: color-mix(in srgb, var(--danger) 70%, var(--wow-border-soft));
+  color: var(--danger);
+}
+
+.button-primary {
+  background: linear-gradient(#f7d87b, #c89b3c);
+  border: 2px solid #7a5b24;
+  border-radius: 7px;
+  padding: 10px 16px;
+  font-weight: 600;
+  color: #221205;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.9), inset 0 0 3px rgba(255, 255, 255, 0.2);
+}
+
+.button-primary:active {
+  transform: translateY(1px);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.9), inset 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+.button-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 @keyframes fade-in {

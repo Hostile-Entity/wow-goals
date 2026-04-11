@@ -124,7 +124,9 @@ export function MoreTab({
                     <div className="tags entity-status">{statusLabel(routine)}</div>
                   </div>
                   <div className="entity-side">
-                    <button onClick={() => onManageRoutine(routine)}>Manage</button>
+                    <button className="manage-btn" onClick={() => onManageRoutine(routine)}>
+                      Manage
+                    </button>
                     <div className="meta-row entity-meta-time">
                       {routine.createdAt === routine.updatedAt
                         ? `Created ${formatDateTime(routine.createdAt)}`
@@ -184,8 +186,10 @@ export function MoreTab({
                     <div className="tags entity-status">{statusLabel(goal)}</div>
                   </div>
                   <div className="entity-side">
-                    <button onClick={() => onManageGoal(goal)}>Manage</button>
-                    <button className="goal-charts-btn" onClick={() => setChartsGoalId(goal.id)}>
+                    <button className="manage-btn" onClick={() => onManageGoal(goal)}>
+                      Manage
+                    </button>
+                    <button className="goal-charts-btn manage-btn" onClick={() => setChartsGoalId(goal.id)}>
                       Charts
                     </button>
                     <div className="meta-row entity-meta-time">

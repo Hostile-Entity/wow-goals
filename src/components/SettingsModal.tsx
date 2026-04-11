@@ -7,6 +7,7 @@ interface SettingsModalProps {
   logicalDay: string;
   logicalOffset: number;
   dayStartHour: number;
+  soundVolume: number;
   isCheckingUpdate: boolean;
   isApplyingUpdate: boolean;
   closeSettingsPopup(): void;
@@ -19,6 +20,7 @@ interface SettingsModalProps {
   resetLogicalDayToToday(): Promise<void>;
   setLogicalDay(day: string): Promise<void>;
   setDayStartHour(hour: number): Promise<void>;
+  setSoundVolume(volume: number): Promise<void>;
   openCompleteLog(): void;
 }
 
@@ -29,6 +31,7 @@ export function SettingsModal({
   logicalDay,
   logicalOffset,
   dayStartHour,
+  soundVolume,
   isCheckingUpdate,
   isApplyingUpdate,
   closeSettingsPopup,
@@ -41,6 +44,7 @@ export function SettingsModal({
   resetLogicalDayToToday,
   setLogicalDay,
   setDayStartHour,
+  setSoundVolume,
   openCompleteLog,
 }: SettingsModalProps) {
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -105,6 +109,23 @@ export function SettingsModal({
             >
               Set Day Boundary
             </button>
+          </div>
+        </div>
+        <div className="card">
+          <div className="title">Sound</div>
+          <div className="tags">Button click volume is muted by default.</div>
+          <div className="settings-volume-row">
+            <input
+              className="settings-volume-slider"
+              type="range"
+              min={0}
+              max={100}
+              value={soundVolume}
+              onChange={(e) => {
+                void setSoundVolume(Number(e.currentTarget.value));
+              }}
+            />
+            <div className="meta-row settings-volume-value">{soundVolume === 0 ? "Muted" : `${soundVolume}%`}</div>
           </div>
         </div>
         {showDebugTools && (
