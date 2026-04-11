@@ -59,6 +59,14 @@ type BackupPayload = {
   data: AppStateData;
 };
 
+type GoalMetricUpdateLogDetail = {
+  metricId: string;
+  metricName: string;
+  from: number;
+  to: number;
+  occurredDay: string;
+};
+
 const nowIso = () => new Date().toISOString();
 
 const statusRank: Record<StatusBucket, number> = {
@@ -530,6 +538,28 @@ export function useAppData() {
     };
   }
 
+  function collectGoalMetricUpdates(previousGoal: Goal, nextGoal: Goal, occurredDay: string): GoalMetricUpdateLogDetail[] {
+    const prevMetrics = goalMetrics(previousGoal);
+    const nextMetrics = goalMetrics(nextGoal);
+    const prevById = new Map(prevMetrics.map((metric) => [metric.id, metric]));
+    const updates: GoalMetricUpdateLogDetail[] = [];
+
+    for (const metric of nextMetrics) {
+      const previousMetric = prevById.get(metric.id);
+      if (!previousMetric) continue;
+      if (previousMetric.current === metric.current) continue;
+      updates.push({
+        metricId: metric.id,
+        metricName: metric.name,
+        from: previousMetric.current,
+        to: metric.current,
+        occurredDay,
+      });
+    }
+
+    return updates;
+  }
+
   async function addNote(): Promise<void> {
     const lines = noteInput.replace(/\r\n/g, "\n").split("\n");
     const titleLineIndex = lines.findIndex((line) => line.trim().length > 0);
@@ -556,7 +586,14 @@ export function useAppData() {
     const current = await getById(store, id);
     if (!current) return;
     const updated = { ...mutator(current), updatedAt: nowIso() };
+    const metricUpdates =
+      type === "goal"
+        ? collectGoalMetricUpdates(current as Goal, updated as Goal, toDayString(updated.updatedAt, dayStartHour))
+        : [];
     await putItem(store, updated);
+    for (const metricUpdate of metricUpdates) {
+      await logEvent("goal-metric-update", "goal", id, JSON.stringify(metricUpdate));
+    }
     await logEvent("update", type, id, "Updated item");
     await reloadAll();
   }

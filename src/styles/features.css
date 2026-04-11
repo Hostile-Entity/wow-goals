@@ -66,6 +66,15 @@
   gap: 6px;
 }
 
+.editor-save-row.is-edit {
+  justify-content: flex-end;
+}
+
+.goal-metric-footer {
+  justify-content: space-between;
+  align-items: center;
+}
+
 .inline-select {
   display: grid;
   gap: 3px;
@@ -257,6 +266,10 @@
   margin-bottom: 0;
 }
 
+.goal-charts-btn {
+  margin-top: 4px;
+}
+
 .review-wrap {
   display: grid;
   gap: 10px;
@@ -356,6 +369,51 @@
 
 .review-grid-routine {
   cursor: pointer;
+}
+
+.metric-charts-modal {
+  max-width: 640px;
+}
+
+.metric-chart-card {
+  gap: 6px;
+}
+
+.metric-chart {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 85%, #000);
+}
+
+.metric-chart-axis {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.metric-chart-axis-label {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+.metric-chart-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.metric-chart-dot {
+  fill: var(--accent-2);
+}
+
+.metric-chart-point-label {
+  fill: var(--text);
+  font-size: 10px;
+}
+
+.metric-chart-meta {
+  font-size: 0.7rem;
 }
 
 .log-view-page {

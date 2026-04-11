@@ -89,6 +89,7 @@ export function ReviewTab({
   const [weekPlanned, setWeekPlanned] = useState(false);
   const [note, setNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
@@ -108,6 +109,7 @@ export function ReviewTab({
     setTasksPrioritized(Boolean(selectedReview?.tasksPrioritized));
     setWeekPlanned(Boolean(selectedReview?.weekPlanned));
     setNote(selectedReview?.note ?? "");
+    setIsLocked(Boolean(selectedReview));
   }, [selectedReview, selectedWeek]);
 
   const weekDays = useMemo(() => getWeekDays(selectedWeek), [selectedWeek]);
@@ -126,14 +128,11 @@ export function ReviewTab({
     return counts;
   }, [completions, weekDays, dayStartHour]);
 
-  const activeRoutines = useMemo(
-    () => routines.filter((routine) => routine.status === "active" || routine.status === "in_progress"),
-    [routines],
-  );
+  const trackedRoutines = useMemo(() => routines.filter((routine) => routine.status === "in_progress"), [routines]);
 
   const routineDoneMap = useMemo(() => {
     const map = new Map<string, Set<string>>();
-    for (const routine of activeRoutines) {
+    for (const routine of trackedRoutines) {
       map.set(routine.id, new Set());
     }
     for (const completion of completions) {
@@ -143,7 +142,7 @@ export function ReviewTab({
       map.get(completion.entityId)?.add(day);
     }
     return map;
-  }, [activeRoutines, completions, weekDays, dayStartHour]);
+  }, [trackedRoutines, completions, weekDays, dayStartHour]);
 
   const trackedProjects = useMemo(() => projects.filter((project) => project.status === "in_progress"), [projects]);
 
@@ -196,7 +195,7 @@ export function ReviewTab({
   }
 
   async function handleSave(): Promise<void> {
-    if (isSaving) return;
+    if (isSaving || isLocked) return;
     setIsSaving(true);
     try {
       await saveWeeklyReview({
@@ -207,9 +206,18 @@ export function ReviewTab({
         weekPlanned,
         note,
       });
+      setIsLocked(true);
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function handleSaveOrEdit(): void {
+    if (isLocked) {
+      setIsLocked(false);
+      return;
+    }
+    void handleSave();
   }
 
   return (
@@ -224,27 +232,28 @@ export function ReviewTab({
         </button>
       </div>
 
-      <div className="checklist review-checklist">
+      <div className={`checklist review-checklist ${isLocked ? "is-locked" : ""}`}>
         <label>
-          <input type="checkbox" checked={goalsChecked} onChange={(e) => setGoalsChecked(e.currentTarget.checked)} /> Goals reviewed
+          <input type="checkbox" checked={goalsChecked} disabled={isLocked || isSaving} onChange={(e) => setGoalsChecked(e.currentTarget.checked)} /> Goals reviewed
         </label>
         <label>
-          <input type="checkbox" checked={inboxCleared} onChange={(e) => setInboxCleared(e.currentTarget.checked)} /> Notes cleaned
+          <input type="checkbox" checked={inboxCleared} disabled={isLocked || isSaving} onChange={(e) => setInboxCleared(e.currentTarget.checked)} /> Notes cleaned
         </label>
         <label>
           <input
             type="checkbox"
             checked={tasksPrioritized}
+            disabled={isLocked || isSaving}
             onChange={(e) => setTasksPrioritized(e.currentTarget.checked)}
           />
           Tasks prioritized
         </label>
         <label>
-          <input type="checkbox" checked={weekPlanned} onChange={(e) => setWeekPlanned(e.currentTarget.checked)} /> Week planned
+          <input type="checkbox" checked={weekPlanned} disabled={isLocked || isSaving} onChange={(e) => setWeekPlanned(e.currentTarget.checked)} /> Week planned
         </label>
-        <textarea value={note} onChange={(e) => setNote(e.currentTarget.value)} placeholder="What changed this week?" />
-        <button type="button" onClick={() => void handleSave()} disabled={isSaving}>
-          {isSaving ? "Saving..." : "Save Weekly Review"}
+        <textarea value={note} disabled={isLocked || isSaving} onChange={(e) => setNote(e.currentTarget.value)} placeholder="What changed this week?" />
+        <button type="button" onClick={handleSaveOrEdit} disabled={isSaving}>
+          {isSaving ? "Saving..." : isLocked ? "Edit" : "Save Weekly Review"}
         </button>
       </div>
 
@@ -264,22 +273,7 @@ export function ReviewTab({
             </div>
           ))}
 
-          {trackedProjects.map((project) => (
-            <Fragment key={`project-row-${project.id}`}>
-              <div key={`project-label-${project.id}`} className="review-grid-label">
-                <span className="review-label-text" title={`${project.title} TODOs`}>
-                  {project.title} TODOs
-                </span>
-              </div>
-              {weekDays.map((day) => (
-                <div key={`project-${project.id}-${day}`} className="review-grid-cell review-grid-value">
-                  {projectTodoDoneMap.get(project.id)?.get(day) ?? 0}
-                </div>
-              ))}
-            </Fragment>
-          ))}
-
-          {activeRoutines.map((routine) => (
+          {trackedRoutines.map((routine) => (
             <Fragment key={`routine-row-${routine.id}`}>
               <div key={`routine-label-${routine.id}`} className="review-grid-label">
                 <span className="review-label-text" title={routine.title}>
@@ -304,6 +298,21 @@ export function ReviewTab({
                   />
                 );
               })}
+            </Fragment>
+          ))}
+
+          {trackedProjects.map((project) => (
+            <Fragment key={`project-row-${project.id}`}>
+              <div key={`project-label-${project.id}`} className="review-grid-label">
+                <span className="review-label-text" title={`${project.title} TODOs`}>
+                  {project.title} TODOs
+                </span>
+              </div>
+              {weekDays.map((day) => (
+                <div key={`project-${project.id}-${day}`} className="review-grid-cell review-grid-value">
+                  {projectTodoDoneMap.get(project.id)?.get(day) ?? 0}
+                </div>
+              ))}
             </Fragment>
           ))}
         </div>
