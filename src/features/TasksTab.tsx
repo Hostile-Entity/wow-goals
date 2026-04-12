@@ -1,17 +1,19 @@
 import { useMemo } from "react";
-import { AppData, getStatusBucket } from "../state/useAppData";
+import { AppData, formatDueLabel, getStatusBucket } from "../state/useAppData";
 import { Task } from "../types";
 
 interface TasksTabProps {
   filteredTasks: AppData["filteredTasks"];
   goals: AppData["state"]["goals"];
   projects: AppData["state"]["projects"];
+  logicalDay: AppData["logicalDay"];
+  showStatus: boolean;
   statusLabel: AppData["statusLabel"];
   onManage(task: Task): void;
   formatDateTime(iso: string): string;
 }
 
-export function TasksTab({ filteredTasks, goals, projects, statusLabel, onManage, formatDateTime }: TasksTabProps) {
+export function TasksTab({ filteredTasks, goals, projects, logicalDay, showStatus, statusLabel, onManage, formatDateTime }: TasksTabProps) {
   const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal.title])), [goals]);
   const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project.title])), [projects]);
 
@@ -36,9 +38,9 @@ export function TasksTab({ filteredTasks, goals, projects, statusLabel, onManage
             </div>
             <div className="card-footer">
               <div className="card-footer-left">
-                <div className="tags entity-status entity-footer-meta">{statusLabel(task)}</div>
+                {showStatus ? <div className="tags entity-status entity-footer-meta">{statusLabel(task)}</div> : null}
                 <div className="tags entity-summary entity-footer-meta">
-                  {task.deadline ? `due ${task.deadline} | ` : ""}postponed {task.postponedCount}
+                  {task.deadline ? `${formatDueLabel(task.deadline, logicalDay)} | ` : ""}postponed {task.postponedCount}
                   {task.goalId ? ` | goal ${goalById.get(task.goalId) ?? "Unknown"}` : ""}
                   {task.projectId ? ` | project ${projectById.get(task.projectId) ?? "Unknown"}` : ""}
                 </div>

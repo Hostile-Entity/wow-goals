@@ -1,4 +1,48 @@
 :root {
+  --wow-bg: #eef2f7;
+  --wow-bg-mid: #f4f7fb;
+  --wow-bg-top: #ffffff;
+  --wow-panel: #ffffff;
+  --wow-panel-inner: #f8fafc;
+  --wow-border: #cfd7e3;
+  --wow-border-soft: #dde4ee;
+  --wow-border-blue: #8aa4c2;
+  --wow-gold: #1f4f8a;
+  --wow-gold-soft: #2f629e;
+  --wow-text: #142033;
+  --wow-text-muted: #5a6b84;
+  --wow-red: #c13232;
+  --wow-green: #1f7a3c;
+  --wow-shadow-strong: 0 4px 16px rgba(15, 28, 48, 0.08);
+  --wow-font: "Trebuchet MS", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+
+  --bg: var(--wow-bg);
+  --panel: var(--wow-panel);
+  --panel-alt: var(--wow-panel-inner);
+  --text: var(--wow-text);
+  --muted: var(--wow-text-muted);
+  --accent: var(--wow-green);
+  --accent-2: var(--wow-gold);
+  --danger: var(--wow-red);
+  --ok: var(--wow-green);
+  --line: var(--wow-border-soft);
+  --radius: 9px;
+  --tabs-height: 54px;
+  --notes-composer-height: 60px;
+  --notes-composer-live-height: 60px;
+
+  --body-bg: #eef2f7;
+  --button-bg: #f4f7fb;
+  --button-bg-active: #e8eef7;
+  --button-border: #c9d5e4;
+  --button-shadow: none;
+  --button-hover-text: #0f3566;
+  --button-primary-bg: #1f4f8a;
+  --button-primary-text: #ffffff;
+  --button-primary-border: #1a4478;
+}
+
+:root[data-theme="wow"] {
   --wow-bg: #05070b;
   --wow-bg-mid: #101520;
   --wow-bg-top: #181f30;
@@ -16,20 +60,19 @@
   --wow-shadow-strong: 0 0 18px rgba(0, 0, 0, 0.95);
   --wow-font: Verdana, "Open Sans", Arial, "Helvetica Neue", Helvetica, sans-serif;
 
-  --bg: var(--wow-bg);
-  --panel: var(--wow-panel);
-  --panel-alt: var(--wow-panel-inner);
-  --text: var(--wow-text);
-  --muted: var(--wow-text-muted);
-  --accent: var(--wow-green);
-  --accent-2: var(--wow-gold);
-  --danger: var(--wow-red);
-  --ok: var(--wow-green);
-  --line: var(--wow-border-soft);
-  --radius: 9px;
-  --tabs-height: 54px;
-  --notes-composer-height: 60px;
-  --notes-composer-live-height: 60px;
+  --body-bg:
+    radial-gradient(circle at top, #27344e 0, rgba(8, 9, 14, 0.9) 55%, #020308 100%),
+    radial-gradient(circle at bottom, #1d1010 0, transparent 60%);
+  --button-bg: radial-gradient(circle at top, rgba(83, 115, 168, 0.15) 0, transparent 60%), linear-gradient(180deg, #171d2a 0%, #0a0f17 100%);
+  --button-bg-active:
+    radial-gradient(circle at top, rgba(89, 132, 192, 0.45) 0, transparent 60%),
+    linear-gradient(180deg, #1a2233 0, #070910 100%);
+  --button-border: var(--wow-border-soft);
+  --button-shadow: 0 0 8px rgba(0, 0, 0, 0.9), inset 0 0 2px rgba(255, 255, 255, 0.1);
+  --button-hover-text: var(--wow-gold);
+  --button-primary-bg: linear-gradient(#f7d87b, #c89b3c);
+  --button-primary-text: #221205;
+  --button-primary-border: #7a5b24;
 }
 
 * {
@@ -46,9 +89,7 @@ body {
   margin: 0;
   font-family: var(--wow-font);
   color: var(--text);
-  background:
-    radial-gradient(circle at top, #27344e 0, rgba(8, 9, 14, 0.9) 55%, #020308 100%),
-    radial-gradient(circle at bottom, #1d1010 0, transparent 60%);
+  background: var(--body-bg);
   overflow: hidden;
 }
 
@@ -77,26 +118,24 @@ textarea {
 
 button {
   color: var(--wow-text-muted);
-  border: 1px solid var(--wow-border-soft);
-  background: radial-gradient(circle at top, rgba(83, 115, 168, 0.15) 0, transparent 60%), linear-gradient(180deg, #171d2a 0%, #0a0f17 100%);
+  border: 1px solid var(--button-border);
+  background: var(--button-bg);
   border-radius: 7px;
   padding: 6px 9px;
   cursor: pointer;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.9), inset 0 0 2px rgba(255, 255, 255, 0.1);
+  box-shadow: var(--button-shadow);
   transition: transform 100ms ease, border-color 150ms ease, color 150ms ease;
 }
 
 button:hover {
   transform: translateY(-1px);
   border-color: var(--wow-gold-soft);
-  color: var(--wow-gold);
+  color: var(--button-hover-text);
 }
 
 button.active,
 button.ok {
-  background:
-    radial-gradient(circle at top, rgba(89, 132, 192, 0.45) 0, transparent 60%),
-    linear-gradient(180deg, #1a2233 0, #070910 100%);
+  background: var(--button-bg-active);
   color: var(--wow-gold);
   border-color: var(--wow-gold-soft);
   box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.7), 0 0 9px rgba(93, 151, 255, 0.55);
@@ -114,13 +153,13 @@ button.danger {
 }
 
 .button-primary {
-  background: linear-gradient(#f7d87b, #c89b3c);
-  border: 2px solid #7a5b24;
+  background: var(--button-primary-bg);
+  border: 2px solid var(--button-primary-border);
   border-radius: 7px;
   padding: 10px 16px;
   font-weight: 600;
-  color: #221205;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+  color: var(--button-primary-text);
+  text-shadow: none;
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.9), inset 0 0 3px rgba(255, 255, 255, 0.2);
 }
 
@@ -132,6 +171,34 @@ button.danger {
 .button-primary:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+:root[data-theme="light"] .app,
+:root[data-theme="light"] .topbar,
+:root[data-theme="light"] .tabs,
+:root[data-theme="light"] .notes-composer,
+:root[data-theme="light"] .sticky-head,
+:root[data-theme="light"] .filter-menu,
+:root[data-theme="light"] .modal,
+:root[data-theme="light"] .card,
+:root[data-theme="light"] .checklist,
+:root[data-theme="light"] .review-grid-wrap,
+:root[data-theme="light"] .stat {
+  background: var(--panel);
+  box-shadow: none;
+}
+
+:root[data-theme="light"] .app {
+  border: 1px solid var(--line);
+}
+
+:root[data-theme="light"] .tabs button.active {
+  box-shadow: none;
+  background: var(--button-bg-active);
+}
+
+:root[data-theme="light"] * {
+  text-shadow: none !important;
 }
 
 @keyframes fade-in {

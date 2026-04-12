@@ -79,6 +79,8 @@ export interface AppSettings {
   dayOffset: number;
   dayStartHour: number;
   soundVolume: number;
+  showStatus: boolean;
+  theme: "light" | "wow";
 }
 
 export interface AppStateData {

@@ -5,6 +5,7 @@ import { Note } from "../types";
 
 interface NotesTabProps {
   filteredNotes: AppData["filteredNotes"];
+  showStatus: boolean;
   statusLabel: AppData["statusLabel"];
   onManage(note: Note): void;
   formatDateTime(iso: string): string;
@@ -15,12 +16,13 @@ const NOTES_PAGE_SIZE = 60;
 
 interface NoteCardProps {
   note: Note;
+  showStatus: boolean;
   statusLabel: AppData["statusLabel"];
   onManage(note: Note): void;
   formatDateTime(iso: string): string;
 }
 
-const NoteCard = memo(function NoteCard({ note, statusLabel, onManage, formatDateTime }: NoteCardProps) {
+const NoteCard = memo(function NoteCard({ note, showStatus, statusLabel, onManage, formatDateTime }: NoteCardProps) {
   const bucket = getStatusBucket(note);
   const cardToneClass = bucket === "in_progress" ? "is-in-progress" : bucket !== "active" ? "is-dimmed" : "";
 
@@ -39,10 +41,12 @@ const NoteCard = memo(function NoteCard({ note, statusLabel, onManage, formatDat
       </div>
       <div className="card-footer">
         <div className="card-footer-left">
-          <div className="tags note-status">
-            {statusLabel(note)}
-            {note.triagedTo ? ` -> ${note.triagedTo}` : ""}
-          </div>
+          {showStatus || note.triagedTo ? (
+            <div className="tags note-status">
+              {showStatus ? statusLabel(note) : ""}
+              {note.triagedTo ? `${showStatus ? " -> " : "triaged to "}${note.triagedTo}` : ""}
+            </div>
+          ) : null}
         </div>
         <div className="meta-row note-meta-time">
           {note.createdAt === note.updatedAt
@@ -54,7 +58,7 @@ const NoteCard = memo(function NoteCard({ note, statusLabel, onManage, formatDat
   );
 });
 
-export function NotesTab({ filteredNotes, statusLabel, onManage, formatDateTime, ensureVisibleItemId }: NotesTabProps) {
+export function NotesTab({ filteredNotes, showStatus, statusLabel, onManage, formatDateTime, ensureVisibleItemId }: NotesTabProps) {
   const [visibleCount, setVisibleCount] = useState(NOTES_PAGE_SIZE);
 
   useEffect(() => {
@@ -114,7 +118,7 @@ export function NotesTab({ filteredNotes, statusLabel, onManage, formatDateTime,
               className="notes-virtual-row"
               style={{ transform: `translateY(${virtualRow.start}px)` }}
             >
-              <NoteCard note={note} statusLabel={statusLabel} onManage={onManage} formatDateTime={formatDateTime} />
+              <NoteCard note={note} showStatus={showStatus} statusLabel={statusLabel} onManage={onManage} formatDateTime={formatDateTime} />
             </div>
           );
         })}

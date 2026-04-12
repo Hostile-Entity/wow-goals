@@ -1,4 +1,4 @@
-import { AppData } from "../state/useAppData";
+import { AppData, formatDueLabel } from "../state/useAppData";
 
 interface TodayTabProps {
   completedTodayCount: number;
@@ -48,7 +48,7 @@ export function TodayTab({
           <article key={task.id} className="card today-task-card">
             <div className="today-task-main">
               <div className="title today-task-title">{task.title}</div>
-              <div className="meta-row today-task-subtitle">{task.deadline ? `Due ${task.deadline}` : "No deadline"}</div>
+              <div className="meta-row today-task-subtitle">{task.deadline ? formatDueLabel(task.deadline, logicalDay) : "No deadline"}</div>
             </div>
             <div className="today-task-actions">
               <button className="today-action-btn" onClick={() => void completeTask(task.id)}>
