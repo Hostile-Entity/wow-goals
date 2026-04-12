@@ -161,3 +161,9 @@ mark {
   min-width: 56px;
   text-align: right;
 }
+
+.settings-theme-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+}

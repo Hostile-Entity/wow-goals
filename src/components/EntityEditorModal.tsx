@@ -185,6 +185,11 @@ export function EntityEditorModal({
 
   const canSave = title.trim().length > 0;
 
+  async function runActionAndClose(action: () => Promise<void>): Promise<void> {
+    await action();
+    close();
+  }
+
   function updateGoalMetric(id: string, patch: Partial<GoalMetricInput>): void {
     setGoalMetrics((prev) => prev.map((metric) => (metric.id === id ? { ...metric, ...patch } : metric)));
   }
@@ -365,30 +370,30 @@ export function EntityEditorModal({
 
         {mode === "edit" && type === "note" && entity && onTriageNote ? (
           <div className="actions">
-            <button onClick={() => void onTriageNote(entity as Note, "task")}>To Task</button>
-            <button onClick={() => void onTriageNote(entity as Note, "project")}>To Project</button>
-            <button onClick={() => void onTriageNote(entity as Note, "goal")}>To Goal</button>
-            <button onClick={() => void onTriageNote(entity as Note, "routine")}>To Routine</button>
+            <button onClick={() => void runActionAndClose(() => onTriageNote(entity as Note, "task"))}>To Task</button>
+            <button onClick={() => void runActionAndClose(() => onTriageNote(entity as Note, "project"))}>To Project</button>
+            <button onClick={() => void runActionAndClose(() => onTriageNote(entity as Note, "goal"))}>To Goal</button>
+            <button onClick={() => void runActionAndClose(() => onTriageNote(entity as Note, "routine"))}>To Routine</button>
           </div>
         ) : null}
 
         {mode === "edit" && entity ? (
           <div className="actions">
-            {type === "task" && onDoneTask ? <button onClick={() => void onDoneTask(entity.id)}>Done</button> : null}
-            {type === "task" && onPostponeTask ? <button onClick={() => void onPostponeTask(entity.id)}>Postpone</button> : null}
+            {type === "task" && onDoneTask ? <button onClick={() => void runActionAndClose(() => onDoneTask(entity.id))}>Done</button> : null}
+            {type === "task" && onPostponeTask ? <button onClick={() => void runActionAndClose(() => onPostponeTask(entity.id))}>Postpone</button> : null}
             {entity.status !== "discarded" && onSetStatus ? (
               entity.status === "in_progress" ? (
-                <button onClick={() => void onSetStatus(type, entity.id, "active")}>Mark Active</button>
+                <button onClick={() => void runActionAndClose(() => onSetStatus(type, entity.id, "active"))}>Mark Active</button>
               ) : (
-                <button onClick={() => void onSetStatus(type, entity.id, "in_progress")}>Mark In Progress</button>
+                <button onClick={() => void runActionAndClose(() => onSetStatus(type, entity.id, "in_progress"))}>Mark In Progress</button>
               )
             ) : null}
             {entity.status === "discarded" ? (
-              <button onClick={() => onRecover && void onRecover(type, entity.id)}>Recover</button>
+              <button onClick={() => onRecover && void runActionAndClose(() => onRecover(type, entity.id))}>Recover</button>
             ) : (
-              <button onClick={() => onDiscard && void onDiscard(type, entity.id)}>Discard</button>
+              <button onClick={() => onDiscard && void runActionAndClose(() => onDiscard(type, entity.id))}>Discard</button>
             )}
-            <button className="danger" onClick={() => onDelete && void onDelete(type, entity.id)}>
+            <button className="danger" onClick={() => onDelete && void runActionAndClose(() => onDelete(type, entity.id))}>
               Delete
             </button>
           </div>

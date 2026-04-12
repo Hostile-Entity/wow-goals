@@ -8,6 +8,8 @@ interface SettingsModalProps {
   logicalOffset: number;
   dayStartHour: number;
   soundVolume: number;
+  showStatus: boolean;
+  theme: "light" | "wow";
   isCheckingUpdate: boolean;
   isApplyingUpdate: boolean;
   closeSettingsPopup(): void;
@@ -21,6 +23,8 @@ interface SettingsModalProps {
   setLogicalDay(day: string): Promise<void>;
   setDayStartHour(hour: number): Promise<void>;
   setSoundVolume(volume: number): Promise<void>;
+  setShowStatus(next: boolean): Promise<void>;
+  setTheme(next: "light" | "wow"): Promise<void>;
   openCompleteLog(): void;
 }
 
@@ -32,6 +36,8 @@ export function SettingsModal({
   logicalOffset,
   dayStartHour,
   soundVolume,
+  showStatus,
+  theme,
   isCheckingUpdate,
   isApplyingUpdate,
   closeSettingsPopup,
@@ -45,6 +51,8 @@ export function SettingsModal({
   setLogicalDay,
   setDayStartHour,
   setSoundVolume,
+  setShowStatus,
+  setTheme,
   openCompleteLog,
 }: SettingsModalProps) {
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -126,6 +134,25 @@ export function SettingsModal({
               }}
             />
             <div className="meta-row settings-volume-value">{soundVolume === 0 ? "Muted" : `${soundVolume}%`}</div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="title">Display</div>
+          <div className="tags">Show or hide item status labels on cards.</div>
+          <div className="actions">
+            <button onClick={() => void setShowStatus(!showStatus)}>{showStatus ? "Show status: On" : "Show status: Off"}</button>
+          </div>
+        </div>
+        <div className="card">
+          <div className="title">Theme</div>
+          <div className="tags">Choose visual style.</div>
+          <div className="actions settings-theme-options">
+            <button className={theme === "light" ? "active" : ""} onClick={() => void setTheme("light")}>
+              Light
+            </button>
+            <button className={theme === "wow" ? "active" : ""} onClick={() => void setTheme("wow")}>
+              WOW
+            </button>
           </div>
         </div>
         {showDebugTools && (

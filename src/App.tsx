@@ -111,6 +111,10 @@ function App() {
   }, []);
 
   useEffect(() => {
+    document.documentElement.setAttribute("data-theme", app.theme);
+  }, [app.theme]);
+
+  useEffect(() => {
     if (!isSearchMode) return;
     const timer = window.setTimeout(() => {
       if (!searchInputRef.current) return;
@@ -383,6 +387,7 @@ function App() {
                 </div>
                 <NotesTab
                   filteredNotes={app.filteredNotes}
+                  showStatus={app.showStatus}
                   statusLabel={app.statusLabel}
                   formatDateTime={formatDateTime}
                   ensureVisibleItemId={scrollTargetId}
@@ -401,6 +406,8 @@ function App() {
                   filteredTasks={app.filteredTasks}
                   goals={app.state.goals}
                   projects={app.state.projects}
+                  logicalDay={app.logicalDay}
+                  showStatus={app.showStatus}
                   statusLabel={app.statusLabel}
                   formatDateTime={formatDateTime}
                   onManage={(task) => setEditor({ mode: "edit", type: "task", id: task.id })}
@@ -424,14 +431,15 @@ function App() {
             )}
 
             {app.tab === "more" && (
-              <MoreTab
-                moreTab={app.moreTab}
-                setMoreTab={app.setMoreTab}
-                filteredRoutines={app.filteredRoutines}
-                filteredGoals={app.filteredGoals}
-                goals={app.state.goals}
-                projects={app.state.projects}
-                tasks={app.state.tasks}
+                <MoreTab
+                  moreTab={app.moreTab}
+                  setMoreTab={app.setMoreTab}
+                  filteredRoutines={app.filteredRoutines}
+                  filteredGoals={app.filteredGoals}
+                  showStatus={app.showStatus}
+                  goals={app.state.goals}
+                  projects={app.state.projects}
+                  tasks={app.state.tasks}
                 routines={app.state.routines}
                 completions={app.state.completions}
                 reviews={app.state.reviews}
@@ -460,6 +468,8 @@ function App() {
                 <ProjectsTab
                   filteredProjects={app.filteredProjects}
                   goals={app.state.goals}
+                  logicalDay={app.logicalDay}
+                  showStatus={app.showStatus}
                   statusLabel={app.statusLabel}
                   onToggleTodo={(projectId, lineIndex, checked) => {
                     void app.toggleProjectTodo(projectId, lineIndex, checked);
@@ -499,6 +509,8 @@ function App() {
           logicalOffset={app.logicalOffset}
           dayStartHour={app.dayStartHour}
           soundVolume={app.soundVolume}
+          showStatus={app.showStatus}
+          theme={app.theme}
           isCheckingUpdate={app.isCheckingUpdate}
           isApplyingUpdate={app.isApplyingUpdate}
           closeSettingsPopup={app.closeSettingsPopup}
@@ -512,6 +524,8 @@ function App() {
           setLogicalDay={app.setLogicalDay}
           setDayStartHour={app.setDayStartHour}
           setSoundVolume={app.setSoundVolume}
+          setShowStatus={app.setShowStatus}
+          setTheme={app.setTheme}
           openCompleteLog={handleOpenCompleteLog}
         />
       )}

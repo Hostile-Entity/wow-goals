@@ -55,6 +55,8 @@ const emptySettings: AppSettings = {
   dayOffset: 0,
   dayStartHour: DEFAULT_DAY_START_HOUR,
   soundVolume: DEFAULT_SOUND_VOLUME,
+  showStatus: false,
+  theme: "light",
 };
 const dataStores = ["notes", "tasks", "projects", "goals", "routines", "completions", "reviews", "logs"] as const;
 
@@ -203,6 +205,44 @@ function sortAndFilterItems<T extends SortableEntity>(items: T[], filter: Status
   return sorted.filter((item) => getStatusBucket(item) === filter);
 }
 
+function daysUntil(fromDay: string, toDay?: string): number | null {
+  if (!toDay) return null;
+  const from = new Date(`${fromDay}T12:00:00`);
+  const to = new Date(`${toDay}T12:00:00`);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+  return Math.round((to.getTime() - from.getTime()) / 86400000);
+}
+
+function sortAndFilterTasks(tasks: Task[], filter: StatusFilter, logicalDay: string): Task[] {
+  const sorted = [...tasks].sort((a, b) => {
+    const rankDiff = statusRank[getStatusBucket(a)] - statusRank[getStatusBucket(b)];
+    if (rankDiff !== 0) return rankDiff;
+
+    const aDaysToDeadline = daysUntil(logicalDay, a.deadline);
+    const bDaysToDeadline = daysUntil(logicalDay, b.deadline);
+    const aIsSoon = aDaysToDeadline !== null && aDaysToDeadline >= 0 && aDaysToDeadline <= 2;
+    const bIsSoon = bDaysToDeadline !== null && bDaysToDeadline >= 0 && bDaysToDeadline <= 2;
+    if (aIsSoon !== bIsSoon) return aIsSoon ? -1 : 1;
+
+    const priorityDiff = a.priority - b.priority;
+    if (priorityDiff !== 0) return priorityDiff;
+
+    if (aDaysToDeadline !== null && bDaysToDeadline !== null && aDaysToDeadline !== bDaysToDeadline) {
+      return aDaysToDeadline - bDaysToDeadline;
+    }
+    if (aDaysToDeadline === null && bDaysToDeadline !== null) return 1;
+    if (aDaysToDeadline !== null && bDaysToDeadline === null) return -1;
+
+    const updatedAtDiff = b.updatedAt.localeCompare(a.updatedAt);
+    if (updatedAtDiff !== 0) return updatedAtDiff;
+
+    return b.createdAt.localeCompare(a.createdAt);
+  });
+
+  if (filter === "all") return sorted;
+  return sorted.filter((task) => getStatusBucket(task) === filter);
+}
+
 export function formatDateTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) {
@@ -214,6 +254,26 @@ export function formatDateTime(iso: string): string {
   const hh = String(d.getHours()).padStart(2, "0");
   const min = String(d.getMinutes()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+}
+
+export function formatDueLabel(deadline: string, logicalDay: string): string {
+  const due = new Date(`${deadline}T12:00:00`);
+  const today = new Date(`${logicalDay}T12:00:00`);
+  if (Number.isNaN(due.getTime()) || Number.isNaN(today.getTime())) {
+    return `Due ${deadline}`;
+  }
+
+  const diffDays = Math.round((due.getTime() - today.getTime()) / 86400000);
+  if (diffDays === 0) return "Due today";
+  if (diffDays === 1) return "Due in 1 day";
+  if (diffDays > 1 && diffDays < 30) return `Due in ${diffDays} days`;
+  if (diffDays >= 30) {
+    const months = Math.floor(diffDays / 30);
+    return months === 1 ? "Due in 1 month" : `Due in ${months} months`;
+  }
+
+  const overdueDays = Math.abs(diffDays);
+  return overdueDays === 1 ? "Overdue by 1 day" : `Overdue by ${overdueDays} days`;
 }
 
 function nextDay(day: string): string {
@@ -237,7 +297,13 @@ function toLogicalDay(offset: number, nowMs: number, dayStartHour: number): stri
 
 function normalizeSettings(raw: unknown): AppSettings {
   if (raw && typeof raw === "object" && "id" in raw && (raw as { id?: string }).id === "settings") {
-    const row = raw as { dayOffset?: unknown; dayStartHour?: unknown; soundVolume?: unknown };
+    const row = raw as {
+      dayOffset?: unknown;
+      dayStartHour?: unknown;
+      soundVolume?: unknown;
+      showStatus?: unknown;
+      theme?: unknown;
+    };
     const parsedDayStartHour =
       typeof row.dayStartHour === "number" && Number.isFinite(row.dayStartHour)
         ? Math.max(0, Math.min(23, Math.trunc(row.dayStartHour)))
@@ -246,8 +312,17 @@ function normalizeSettings(raw: unknown): AppSettings {
       typeof row.soundVolume === "number" && Number.isFinite(row.soundVolume)
         ? Math.max(0, Math.min(100, Math.trunc(row.soundVolume)))
         : DEFAULT_SOUND_VOLUME;
+    const parsedShowStatus = row.showStatus === true;
+    const parsedTheme = row.theme === "wow" ? "wow" : "light";
     if (typeof row.dayOffset === "number" && Number.isFinite(row.dayOffset)) {
-      return { id: "settings", dayOffset: Math.trunc(row.dayOffset), dayStartHour: parsedDayStartHour, soundVolume: parsedSoundVolume };
+      return {
+        id: "settings",
+        dayOffset: Math.trunc(row.dayOffset),
+        dayStartHour: parsedDayStartHour,
+        soundVolume: parsedSoundVolume,
+        showStatus: parsedShowStatus,
+        theme: parsedTheme,
+      };
     }
   }
   return emptySettings;
@@ -290,6 +365,8 @@ export function useAppData() {
   const logicalOffset = state.settings.dayOffset;
   const dayStartHour = state.settings.dayStartHour;
   const soundVolume = state.settings.soundVolume;
+  const showStatus = state.settings.showStatus;
+  const theme = state.settings.theme;
   const logicalDay = toLogicalDay(logicalOffset, clockNowMs, dayStartHour);
 
   async function reloadAll(): Promise<void> {
@@ -1111,42 +1188,52 @@ function goalMetrics(goal: Goal): GoalMetric[] {
 
   async function setLogicalDay(day: string): Promise<void> {
     const offset = dayDiff(toDayString(undefined, dayStartHour), day);
-    await putItem("settings", { id: "settings", dayOffset: offset, dayStartHour, soundVolume });
+    await putItem("settings", { id: "settings", dayOffset: offset, dayStartHour, soundVolume, showStatus, theme });
     await logEvent("debug-date", "settings", "settings", `Logical day offset set to ${offset} (${day})`);
     await reloadAll();
   }
 
   async function decrementLogicalDay(): Promise<void> {
     const nextOffset = logicalOffset - 1;
-    await putItem("settings", { id: "settings", dayOffset: nextOffset, dayStartHour, soundVolume });
+    await putItem("settings", { id: "settings", dayOffset: nextOffset, dayStartHour, soundVolume, showStatus, theme });
     await logEvent("debug-date", "settings", "settings", `Logical day offset changed to ${nextOffset}`);
     await reloadAll();
   }
 
   async function incrementLogicalDay(): Promise<void> {
     const nextOffset = logicalOffset + 1;
-    await putItem("settings", { id: "settings", dayOffset: nextOffset, dayStartHour, soundVolume });
+    await putItem("settings", { id: "settings", dayOffset: nextOffset, dayStartHour, soundVolume, showStatus, theme });
     await logEvent("debug-date", "settings", "settings", `Logical day offset changed to ${nextOffset}`);
     await reloadAll();
   }
 
   async function resetLogicalDayToToday(): Promise<void> {
-    await putItem("settings", { id: "settings", dayOffset: 0, dayStartHour, soundVolume });
+    await putItem("settings", { id: "settings", dayOffset: 0, dayStartHour, soundVolume, showStatus, theme });
     await logEvent("debug-date", "settings", "settings", "Logical day offset reset to 0");
     await reloadAll();
   }
 
   async function setDayStartHour(nextHour: number): Promise<void> {
     const hour = Math.max(0, Math.min(23, Math.trunc(nextHour)));
-    await putItem("settings", { id: "settings", dayOffset: logicalOffset, dayStartHour: hour, soundVolume });
+    await putItem("settings", { id: "settings", dayOffset: logicalOffset, dayStartHour: hour, soundVolume, showStatus, theme });
     await logEvent("settings", "settings", "settings", `Day starts at ${hour}:00`);
     await reloadAll();
   }
 
   async function setSoundVolume(nextVolume: number): Promise<void> {
     const volume = Math.max(0, Math.min(100, Math.trunc(nextVolume)));
-    await putItem("settings", { id: "settings", dayOffset: logicalOffset, dayStartHour, soundVolume: volume });
+    await putItem("settings", { id: "settings", dayOffset: logicalOffset, dayStartHour, soundVolume: volume, showStatus, theme });
     setState((prev) => ({ ...prev, settings: { ...prev.settings, soundVolume: volume } }));
+  }
+
+  async function setShowStatus(nextShowStatus: boolean): Promise<void> {
+    await putItem("settings", { id: "settings", dayOffset: logicalOffset, dayStartHour, soundVolume, showStatus: nextShowStatus, theme });
+    setState((prev) => ({ ...prev, settings: { ...prev.settings, showStatus: nextShowStatus } }));
+  }
+
+  async function setTheme(nextTheme: "light" | "wow"): Promise<void> {
+    await putItem("settings", { id: "settings", dayOffset: logicalOffset, dayStartHour, soundVolume, showStatus, theme: nextTheme });
+    setState((prev) => ({ ...prev, settings: { ...prev.settings, theme: nextTheme } }));
   }
 
   async function exportData(): Promise<void> {
@@ -1227,11 +1314,8 @@ function goalMetrics(goal: Goal): GoalMetric[] {
   }
 
   const activeTasks = useMemo(
-    () =>
-      state.tasks
-        .filter((t) => t.status === "active" || t.status === "in_progress")
-        .sort((a, b) => a.priority - b.priority || (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999")),
-    [state.tasks],
+    () => sortAndFilterTasks(state.tasks, "all", logicalDay).filter((t) => t.status === "active" || t.status === "in_progress"),
+    [state.tasks, logicalDay],
   );
 
   const todayTop3 = useMemo(
@@ -1239,7 +1323,7 @@ function goalMetrics(goal: Goal): GoalMetric[] {
     [activeTasks, logicalDay],
   );
   const filteredNotes = useMemo(() => sortAndFilterItems(state.notes, filters.notes), [state.notes, filters.notes]);
-  const filteredTasks = useMemo(() => sortAndFilterItems(state.tasks, filters.tasks), [state.tasks, filters.tasks]);
+  const filteredTasks = useMemo(() => sortAndFilterTasks(state.tasks, filters.tasks, logicalDay), [state.tasks, filters.tasks, logicalDay]);
   const filteredProjects = useMemo(
     () => sortAndFilterItems(state.projects, filters.projects),
     [state.projects, filters.projects],
@@ -1288,6 +1372,8 @@ function goalMetrics(goal: Goal): GoalMetric[] {
     logicalOffset,
     dayStartHour,
     soundVolume,
+    showStatus,
+    theme,
     logicalDay,
     activeTasks,
     todayTop3,
@@ -1309,6 +1395,8 @@ function goalMetrics(goal: Goal): GoalMetric[] {
     setLogicalDay,
     setDayStartHour,
     setSoundVolume,
+    setShowStatus,
+    setTheme,
     decrementLogicalDay,
     incrementLogicalDay,
     resetLogicalDayToToday,

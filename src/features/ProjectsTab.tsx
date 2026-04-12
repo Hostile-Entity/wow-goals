@@ -1,10 +1,12 @@
 import { useMemo } from "react";
-import { AppData, getStatusBucket } from "../state/useAppData";
+import { AppData, formatDueLabel, getStatusBucket } from "../state/useAppData";
 import { Project } from "../types";
 
 interface ProjectsTabProps {
   filteredProjects: AppData["filteredProjects"];
   goals: AppData["state"]["goals"];
+  logicalDay: AppData["logicalDay"];
+  showStatus: boolean;
   statusLabel: AppData["statusLabel"];
   onToggleTodo(projectId: string, lineIndex: number, checked: boolean): void;
   onManage(project: Project): void;
@@ -18,7 +20,7 @@ function parseTodoLine(line: string): { checked: boolean; text: string } {
   return { checked: false, text: trimmed };
 }
 
-export function ProjectsTab({ filteredProjects, goals, statusLabel, onToggleTodo, onManage, formatDateTime }: ProjectsTabProps) {
+export function ProjectsTab({ filteredProjects, goals, logicalDay, showStatus, statusLabel, onToggleTodo, onManage, formatDateTime }: ProjectsTabProps) {
   const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal.title])), [goals]);
 
   return (
@@ -33,7 +35,6 @@ export function ProjectsTab({ filteredProjects, goals, statusLabel, onToggleTodo
           .filter((line) => line.length > 0);
         const parsedTodo = todoLines.map((line, lineIndex) => ({ ...parseTodoLine(line), lineIndex }));
         const undoneTodo = parsedTodo.filter((line) => !line.checked);
-        const visibleUndoneTodo = undoneTodo.slice(0, 3);
         const completedCount = parsedTodo.filter((line) => line.checked).length;
 
         return (
@@ -47,7 +48,7 @@ export function ProjectsTab({ filteredProjects, goals, statusLabel, onToggleTodo
                       {completedCount}/{parsedTodo.length} TODOs done
                     </div>
                     <div className="project-todo-list">
-                      {visibleUndoneTodo.map((line) => (
+                      {undoneTodo.map((line) => (
                         <label key={`${project.id}-${line.lineIndex}`} className="project-todo-item">
                           <input
                             type="checkbox"
@@ -58,9 +59,6 @@ export function ProjectsTab({ filteredProjects, goals, statusLabel, onToggleTodo
                         </label>
                       ))}
                     </div>
-                    {undoneTodo.length > visibleUndoneTodo.length ? (
-                      <div className="meta-row entity-summary">Showing first {visibleUndoneTodo.length} undone items</div>
-                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -72,8 +70,9 @@ export function ProjectsTab({ filteredProjects, goals, statusLabel, onToggleTodo
             </div>
             <div className="card-footer">
               <div className="card-footer-left">
-                <div className="tags entity-status entity-footer-meta">{statusLabel(project)}</div>
+                {showStatus ? <div className="tags entity-status entity-footer-meta">{statusLabel(project)}</div> : null}
                 <div className="tags entity-summary entity-footer-meta">
+                  {project.deadline ? `${formatDueLabel(project.deadline, logicalDay)} | ` : ""}
                   {project.goalId ? `goal ${goalById.get(project.goalId) ?? "Unknown"}` : "No goal linked"}
                 </div>
               </div>

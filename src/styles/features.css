@@ -41,10 +41,14 @@
 }
 
 .card {
-  border: 1px solid rgba(0, 0, 0, 0.82);
+  border: 1px solid rgba(0, 0, 0, 0.85);
   border-radius: var(--radius);
-  background: radial-gradient(circle at top, rgba(47, 66, 99, 0.25) 0, transparent 70%), linear-gradient(180deg, var(--wow-panel) 0%, var(--wow-panel-inner) 100%);
-  box-shadow: 0 0 0 1px rgba(200, 155, 60, 0.18), 0 0 12px rgba(0, 0, 0, 0.85) inset, var(--wow-shadow-strong);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--wow-panel) 80%, #273247) 0%,
+    color-mix(in srgb, var(--wow-panel-inner) 84%, #1a2333) 100%
+  );
+  box-shadow: 0 0 0 1px rgba(200, 155, 60, 0.15), 0 0 7px rgba(0, 0, 0, 0.68) inset;
   padding: 6px;
   animation: fade-in 180ms ease both;
 }
@@ -206,9 +210,14 @@
 }
 
 .project-todo-list {
+  --project-todo-row-height: 24px;
+  --project-todo-gap: 4px;
   display: grid;
-  gap: 4px;
+  gap: var(--project-todo-gap);
   margin-bottom: 7px;
+  max-height: calc(3 * var(--project-todo-row-height) + 2 * var(--project-todo-gap));
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .project-todo-item {
@@ -216,8 +225,16 @@
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: 6px;
+  min-height: var(--project-todo-row-height);
+  max-height: var(--project-todo-row-height);
   font-size: 0.8rem;
   color: var(--text);
+}
+
+.project-todo-item span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .project-todo-item input {
@@ -484,6 +501,8 @@
   width: 100%;
   display: grid;
   grid-template-columns: minmax(90px, 1.2fr) repeat(7, minmax(0, 1fr));
+  --review-grid-row-size: clamp(30px, 9vw, 40px);
+  grid-auto-rows: var(--review-grid-row-size);
 }
 
 .review-grid-head {
@@ -492,16 +511,20 @@
   color: var(--muted);
   border-bottom: 1px solid var(--line);
   padding: 7px 5px;
+  height: 100%;
+  display: grid;
+  place-items: center;
 }
 
 .review-grid-label {
   border-bottom: 1px solid var(--line);
   border-right: 1px solid var(--line);
-  padding: 6px;
+  padding: 0 6px;
   font-size: 0.72rem;
   color: var(--text);
   display: flex;
   align-items: center;
+  min-height: 0;
 }
 
 .review-label-text {
@@ -514,9 +537,9 @@
 .review-grid-cell {
   border-bottom: 1px solid var(--line);
   border-right: 1px solid var(--line);
-  aspect-ratio: 1 / 1;
   display: grid;
   place-items: center;
+  min-height: 0;
 }
 
 .review-grid-value {
@@ -617,14 +640,21 @@
 }
 
 .is-dimmed {
-  filter: grayscale(0.35) brightness(0.78);
-  border-color: #2a2317;
+  filter: grayscale(0.82) saturate(0.55) brightness(0.68);
+  border-color: #252a33;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--wow-panel) 72%, #0b0e13) 0%, color-mix(in srgb, var(--wow-panel-inner) 76%, #05070a) 100%);
+  box-shadow: 0 0 0 1px rgba(82, 92, 110, 0.2), inset 0 0 0 1px rgba(34, 39, 49, 0.55);
 }
 
 .is-dimmed .title,
 .is-dimmed .tags,
 .is-dimmed .meta-row {
-  color: color-mix(in srgb, var(--muted) 85%, var(--text));
+  color: color-mix(in srgb, var(--muted) 90%, #8e97a8);
+}
+
+.is-dimmed .manage-btn {
+  border-color: color-mix(in srgb, var(--line) 45%, #31394a);
+  color: color-mix(in srgb, var(--muted) 85%, #8f99ad);
 }
 
 .is-in-progress {

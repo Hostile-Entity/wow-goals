@@ -9,6 +9,7 @@ interface MoreTabProps {
   setMoreTab(tab: MoreTabId): void;
   filteredRoutines: AppData["filteredRoutines"];
   filteredGoals: AppData["filteredGoals"];
+  showStatus: boolean;
   goals: AppData["state"]["goals"];
   projects: AppData["state"]["projects"];
   tasks: AppData["state"]["tasks"];
@@ -42,6 +43,7 @@ export function MoreTab({
   setMoreTab,
   filteredRoutines,
   filteredGoals,
+  showStatus,
   goals,
   projects,
   tasks,
@@ -129,7 +131,7 @@ export function MoreTab({
                   </div>
                   <div className="card-footer">
                     <div className="card-footer-left">
-                      <div className="tags entity-status entity-footer-meta">{statusLabel(routine)}</div>
+                      {showStatus ? <div className="tags entity-status entity-footer-meta">{statusLabel(routine)}</div> : null}
                       <div className="tags entity-summary entity-footer-meta">
                         {routine.goalId ? `goal ${goalById.get(routine.goalId) ?? "Unknown"}` : "No goal linked"}
                       </div>
@@ -197,7 +199,7 @@ export function MoreTab({
                   </div>
                   <div className="card-footer">
                     <div className="card-footer-left">
-                      <div className="tags entity-status entity-footer-meta">{statusLabel(goal)}</div>
+                      {showStatus ? <div className="tags entity-status entity-footer-meta">{statusLabel(goal)}</div> : null}
                       <div className="tags entity-summary entity-footer-meta">
                         linked: {linkedProjectCountByGoal.get(goal.id) ?? 0} projects, {linkedTaskCountByGoal.get(goal.id) ?? 0} tasks, {linkedRoutineCountByGoal.get(goal.id) ?? 0} routines
                       </div>
