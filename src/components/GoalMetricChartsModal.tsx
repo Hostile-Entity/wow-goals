@@ -19,22 +19,15 @@ interface GoalMetricChartsModalProps {
 }
 
 function goalMetrics(goal: Goal): GoalMetric[] {
-  if (goal.metrics && goal.metrics.length > 0) {
+  if (goal.metrics.length > 0) {
     return goal.metrics;
   }
-  return [
-    {
-      id: goal.primaryMetricId ?? "legacy_primary",
-      name: goal.metricName,
-      current: goal.metricCurrent,
-      target: goal.metricTarget,
-    },
-  ];
+  return [{ id: goal.primaryMetricId, name: "Progress", current: 0, target: 10 }];
 }
 
 function sortMetricsPrimaryFirst(goal: Goal): GoalMetric[] {
   const metrics = goalMetrics(goal);
-  const primaryId = goal.primaryMetricId ?? metrics[0]?.id;
+  const primaryId = goal.primaryMetricId;
   return [...metrics].sort((a, b) => {
     if (a.id === primaryId) return -1;
     if (b.id === primaryId) return 1;

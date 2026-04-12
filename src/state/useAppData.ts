@@ -34,7 +34,6 @@ export type ProjectDraft = {
   description?: string;
   deadline?: string;
   goalId?: string;
-  importance?: number;
   isActive?: boolean;
 };
 export type GoalDraft = {
@@ -75,6 +74,108 @@ type GoalMetricUpdateLogDetail = {
 };
 
 const nowIso = () => new Date().toISOString();
+
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function ensureNonEmptyText(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function sanitizeBase(raw: any) {
+  const now = nowIso();
+  return {
+    id: ensureNonEmptyText(raw?.id, uid("item")),
+    title: ensureNonEmptyText(raw?.title, "Untitled"),
+    description: ensureNonEmptyText(raw?.description, ""),
+    createdAt: ensureNonEmptyText(raw?.createdAt, now),
+    updatedAt: ensureNonEmptyText(raw?.updatedAt, now),
+    status: raw?.status === "in_progress" || raw?.status === "completed" || raw?.status === "discarded" ? raw.status : "active",
+  } as const;
+}
+
+function sanitizeNotes(items: unknown[]): Note[] {
+  return items.map((raw: any) => {
+    const base = sanitizeBase(raw);
+    return {
+      ...base,
+      ...(raw?.triagedTo ? { triagedTo: raw.triagedTo as EntityType } : {}),
+    };
+  });
+}
+
+function sanitizeTasks(items: unknown[]): Task[] {
+  return items.map((raw: any) => {
+    const base = sanitizeBase(raw);
+    return {
+      ...base,
+      ...(raw?.goalId ? { goalId: String(raw.goalId) } : {}),
+      ...(raw?.projectId ? { projectId: String(raw.projectId) } : {}),
+      ...(raw?.deadline ? { deadline: String(raw.deadline) } : {}),
+      priority: typeof raw?.priority === "number" && Number.isFinite(raw.priority) ? Math.max(1, Math.trunc(raw.priority)) : 1,
+      postponedCount: typeof raw?.postponedCount === "number" && Number.isFinite(raw.postponedCount) ? Math.max(0, Math.trunc(raw.postponedCount)) : 0,
+      ...(raw?.lastPostponedAt ? { lastPostponedAt: String(raw.lastPostponedAt) } : {}),
+    };
+  });
+}
+
+function sanitizeProjects(items: unknown[]): Project[] {
+  return items.map((raw: any) => {
+    const base = sanitizeBase(raw);
+    return {
+      ...base,
+      ...(raw?.goalId ? { goalId: String(raw.goalId) } : {}),
+      ...(raw?.deadline ? { deadline: String(raw.deadline) } : {}),
+      isActive: raw?.isActive !== false,
+    };
+  });
+}
+
+function sanitizeGoals(items: unknown[]): Goal[] {
+  return items.map((raw: any) => {
+    const base = sanitizeBase(raw);
+    const inputMetrics = Array.isArray(raw?.metrics) ? raw.metrics : [];
+    const metrics =
+      inputMetrics.length > 0
+        ? inputMetrics.map((metric: any) => ({
+            id: ensureNonEmptyText(metric?.id, uid("metric")),
+            name: ensureNonEmptyText(metric?.name, "Metric"),
+            current: typeof metric?.current === "number" && Number.isFinite(metric.current) ? metric.current : 0,
+            target: typeof metric?.target === "number" && Number.isFinite(metric.target) ? metric.target : 10,
+          }))
+        : [{ id: uid("metric"), name: "Progress", current: 0, target: 10 }];
+    const primaryMetricId =
+      typeof raw?.primaryMetricId === "string" && metrics.some((metric: GoalMetric) => metric.id === raw.primaryMetricId)
+        ? raw.primaryMetricId
+        : metrics[0].id;
+    return {
+      ...base,
+      metrics,
+      primaryMetricId,
+    };
+  });
+}
+
+function sanitizeRoutines(items: unknown[]): Routine[] {
+  return items.map((raw: any) => {
+    const base = sanitizeBase(raw);
+    return {
+      ...base,
+      ...(raw?.goalId ? { goalId: String(raw.goalId) } : {}),
+    };
+  });
+}
+
+function sanitizeCompletions(items: unknown[]): AppStateData["completions"] {
+  return items.map((raw: any) => ({
+    id: ensureNonEmptyText(raw?.id, uid("cmp")),
+    entityType: raw?.entityType === "routine" ? "routine" : "task",
+    entityId: ensureNonEmptyText(raw?.entityId, "unknown"),
+    date: ensureNonEmptyText(raw?.date, toDayString(raw?.completedAt)),
+    completedAt: ensureNonEmptyText(raw?.completedAt, nowIso()),
+  }));
+}
 
 const statusRank: Record<StatusBucket, number> = {
   in_progress: 0,
@@ -136,7 +237,7 @@ function toLogicalDay(offset: number, nowMs: number, dayStartHour: number): stri
 
 function normalizeSettings(raw: unknown): AppSettings {
   if (raw && typeof raw === "object" && "id" in raw && (raw as { id?: string }).id === "settings") {
-    const row = raw as { dayOffset?: unknown; logicalDate?: unknown; dayStartHour?: unknown; soundVolume?: unknown };
+    const row = raw as { dayOffset?: unknown; dayStartHour?: unknown; soundVolume?: unknown };
     const parsedDayStartHour =
       typeof row.dayStartHour === "number" && Number.isFinite(row.dayStartHour)
         ? Math.max(0, Math.min(23, Math.trunc(row.dayStartHour)))
@@ -147,14 +248,6 @@ function normalizeSettings(raw: unknown): AppSettings {
         : DEFAULT_SOUND_VOLUME;
     if (typeof row.dayOffset === "number" && Number.isFinite(row.dayOffset)) {
       return { id: "settings", dayOffset: Math.trunc(row.dayOffset), dayStartHour: parsedDayStartHour, soundVolume: parsedSoundVolume };
-    }
-    if (typeof row.logicalDate === "string") {
-      return {
-        id: "settings",
-        dayOffset: dayDiff(toDayString(undefined, parsedDayStartHour), row.logicalDate),
-        dayStartHour: parsedDayStartHour,
-        soundVolume: parsedSoundVolume,
-      };
     }
   }
   return emptySettings;
@@ -216,13 +309,44 @@ export function useAppData() {
       getAll("logs"),
       getById("settings", "settings"),
     ]);
+
+    const normalizedNotes = sanitizeNotes(notes);
+    const normalizedTasks = sanitizeTasks(tasks);
+    const normalizedProjects = sanitizeProjects(projects);
+    const normalizedGoals = sanitizeGoals(goals);
+    const normalizedRoutines = sanitizeRoutines(routines);
+    const normalizedCompletions = sanitizeCompletions(completions);
+
+    const sanitizeWrites: Promise<void>[] = [];
+    for (let i = 0; i < notes.length; i += 1) {
+      if (!sameJson(notes[i], normalizedNotes[i])) sanitizeWrites.push(putItem("notes", normalizedNotes[i]));
+    }
+    for (let i = 0; i < tasks.length; i += 1) {
+      if (!sameJson(tasks[i], normalizedTasks[i])) sanitizeWrites.push(putItem("tasks", normalizedTasks[i]));
+    }
+    for (let i = 0; i < projects.length; i += 1) {
+      if (!sameJson(projects[i], normalizedProjects[i])) sanitizeWrites.push(putItem("projects", normalizedProjects[i]));
+    }
+    for (let i = 0; i < goals.length; i += 1) {
+      if (!sameJson(goals[i], normalizedGoals[i])) sanitizeWrites.push(putItem("goals", normalizedGoals[i]));
+    }
+    for (let i = 0; i < routines.length; i += 1) {
+      if (!sameJson(routines[i], normalizedRoutines[i])) sanitizeWrites.push(putItem("routines", normalizedRoutines[i]));
+    }
+    for (let i = 0; i < completions.length; i += 1) {
+      if (!sameJson(completions[i], normalizedCompletions[i])) sanitizeWrites.push(putItem("completions", normalizedCompletions[i]));
+    }
+    if (sanitizeWrites.length > 0) {
+      await Promise.all(sanitizeWrites);
+    }
+
     setState({
-      notes,
-      tasks,
-      projects,
-      goals,
-      routines,
-      completions,
+      notes: normalizedNotes,
+      tasks: normalizedTasks,
+      projects: normalizedProjects,
+      goals: normalizedGoals,
+      routines: normalizedRoutines,
+      completions: normalizedCompletions,
       reviews,
       logs: logs.sort((a, b) => b.at.localeCompare(a.at)),
       settings: normalizeSettings(updatedSettings),
@@ -572,18 +696,11 @@ export function useAppData() {
     };
   }
 
-  function goalMetrics(goal: Goal): GoalMetric[] {
-    if (goal.metrics && goal.metrics.length > 0) {
+function goalMetrics(goal: Goal): GoalMetric[] {
+    if (goal.metrics.length > 0) {
       return goal.metrics;
     }
-    return [
-      {
-        id: "legacy_primary",
-        name: goal.metricName,
-        current: goal.metricCurrent,
-        target: goal.metricTarget,
-      },
-    ];
+    return [{ id: "metric_default", name: "Progress", current: 0, target: 10 }];
   }
 
   function primaryMetric(goal: Goal): GoalMetric {
@@ -598,9 +715,6 @@ export function useAppData() {
       ...goal,
       metrics,
       primaryMetricId: primary.id,
-      metricName: primary.name,
-      metricCurrent: primary.current,
-      metricTarget: primary.target,
     };
   }
 
@@ -731,20 +845,17 @@ export function useAppData() {
         ...makeBase(title),
         description,
         isActive: true,
-        importance: 3,
       };
       await putItem("projects", project);
     }
     if (to === "goal") {
       const target = 10;
+      const metricId = uid("metric");
       const goal: Goal = {
         ...makeBase(title),
         description,
-        isActive: true,
-        metricName: "Progress",
-        metricCurrent: 0,
-        metricTarget: target,
-        metrics: [{ id: uid("metric"), name: "Progress", current: 0, target }],
+        metrics: [{ id: metricId, name: "Progress", current: 0, target }],
+        primaryMetricId: metricId,
       };
       await putItem("goals", goal);
     }
@@ -752,7 +863,6 @@ export function useAppData() {
       const routine: Routine = {
         ...makeBase(title),
         description,
-        cadence: "daily",
       };
       await putItem("routines", routine);
     }
@@ -857,7 +967,6 @@ export function useAppData() {
       ...makeBase(title),
       description: draft.description?.trim() ?? "",
       isActive: draft.isActive ?? true,
-      importance: draft.importance ?? 3,
       deadline: draft.deadline || undefined,
       goalId: draft.goalId || undefined,
     };
@@ -889,10 +998,6 @@ export function useAppData() {
     const goal: Goal = {
       ...makeBase(title),
       description: draft.description?.trim() ?? "",
-      isActive: true,
-      metricName: primaryMetric.name,
-      metricCurrent: primaryMetric.current,
-      metricTarget: primaryMetric.target,
       metrics,
       primaryMetricId: primaryMetric.id,
     };
@@ -946,7 +1051,6 @@ export function useAppData() {
     const routine: Routine = {
       ...makeBase(title),
       description: draft.description?.trim() ?? "",
-      cadence: "daily",
       goalId: draft.goalId || undefined,
     };
     await putItem("routines", routine);
@@ -958,7 +1062,7 @@ export function useAppData() {
     const current = await getById("projects", projectId);
     if (!current) return;
 
-    const sourceDescription = `${String(current.description ?? "")}${(current as Project & { todo?: string }).todo ? `\n${String((current as Project & { todo?: string }).todo)}` : ""}`.trim();
+    const sourceDescription = String(current.description ?? "").trim();
     const lines = sourceDescription
       .split("\n")
       .map((line: string) => line.trim())
