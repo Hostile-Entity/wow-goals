@@ -229,15 +229,15 @@ export function EntityEditorModal({
           <button onClick={close}>Close</button>
         </div>
 
-        <form className="checklist" onSubmit={handleSubmit}>
+        <form className="checklist editor-checklist" onSubmit={handleSubmit}>
           <label className="inline-select">
-            Title
+            <span className="field-label">Title</span>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
           </label>
 
           {type === "project" ? (
             <label className="inline-select">
-              Description
+              <span className="field-label">Description</span>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -247,21 +247,21 @@ export function EntityEditorModal({
             </label>
           ) : (
             <label className="inline-select">
-              Description
+              <span className="field-label">Description</span>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" rows={3} />
             </label>
           )}
 
           {(type === "task" || type === "project") && (
             <label className="inline-select">
-              Deadline
+              <span className="field-label">Deadline</span>
               <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
             </label>
           )}
 
           {(type === "task" || type === "project" || type === "routine") && (
             <label className="inline-select">
-              Goal
+              <span className="field-label">Goal</span>
               <select value={goalId} onChange={(e) => setGoalId(e.currentTarget.value)}>
                 <option value="">None</option>
                 {goals.map((goal) => (
@@ -275,7 +275,7 @@ export function EntityEditorModal({
 
           {type === "task" && (
             <label className="inline-select">
-              Project
+              <span className="field-label">Project</span>
               <select value={projectId} onChange={(e) => setProjectId(e.currentTarget.value)}>
                 <option value="">None</option>
                 {projects.map((project) => (
@@ -289,7 +289,7 @@ export function EntityEditorModal({
 
           {type === "task" && (
             <label className="inline-select">
-              Priority
+              <span className="field-label">Priority</span>
               <input type="number" min={1} value={priority} onChange={(e) => setPriority(e.target.value)} />
             </label>
           )}
@@ -314,11 +314,11 @@ export function EntityEditorModal({
               {currentMetric ? (
                 <article key={currentMetric.id} className="card">
                   <label className="inline-select">
-                    Metric name
+                    <span className="field-label">Metric name</span>
                     <input value={currentMetric.name} onChange={(e) => updateGoalMetric(currentMetric.id, { name: e.target.value })} />
                   </label>
                   <label className="inline-select">
-                    Current value
+                    <span className="field-label">Current value</span>
                     <input
                       type="number"
                       value={currentMetric.current}
@@ -326,7 +326,7 @@ export function EntityEditorModal({
                     />
                   </label>
                   <label className="inline-select">
-                    Target value
+                    <span className="field-label">Target value</span>
                     <input
                       type="number"
                       value={currentMetric.target}
@@ -369,11 +369,11 @@ export function EntityEditorModal({
         </form>
 
         {mode === "edit" && type === "note" && entity && onTriageNote ? (
-          <div className="actions">
-            <button onClick={() => void runActionAndClose(() => onTriageNote(entity as Note, "task"))}>To Task</button>
-            <button onClick={() => void runActionAndClose(() => onTriageNote(entity as Note, "project"))}>To Project</button>
-            <button onClick={() => void runActionAndClose(() => onTriageNote(entity as Note, "goal"))}>To Goal</button>
-            <button onClick={() => void runActionAndClose(() => onTriageNote(entity as Note, "routine"))}>To Routine</button>
+          <div className="actions note-triage-actions">
+            <button onClick={() => void runActionAndClose(() => onTriageNote(entity as Note, "task"))}>Task</button>
+            <button onClick={() => void runActionAndClose(() => onTriageNote(entity as Note, "project"))}>Project</button>
+            <button onClick={() => void runActionAndClose(() => onTriageNote(entity as Note, "goal"))}>Goal</button>
+            <button onClick={() => void runActionAndClose(() => onTriageNote(entity as Note, "routine"))}>Routine</button>
           </div>
         ) : null}
 

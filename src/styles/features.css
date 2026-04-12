@@ -84,6 +84,16 @@
   gap: 6px;
 }
 
+.note-triage-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
+}
+
+.note-triage-actions button {
+  width: 100%;
+}
+
 .editor-save-row.is-edit {
   justify-content: flex-end;
 }
@@ -103,6 +113,44 @@
 .inline-select select {
   min-width: 120px;
   padding: 5px 7px;
+}
+
+.editor-checklist {
+  --editor-label-width: 56px;
+  width: 100%;
+}
+
+.editor-checklist .inline-select {
+  display: grid;
+  grid-template-columns: var(--editor-label-width) minmax(0, 1fr);
+  align-items: start;
+  column-gap: 8px;
+  row-gap: 0;
+  width: 100%;
+}
+
+.editor-checklist .inline-select textarea {
+  resize: vertical;
+}
+
+.editor-checklist .field-label {
+  display: block;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editor-checklist .inline-select > input,
+.editor-checklist .inline-select > textarea,
+.editor-checklist .inline-select > select {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.editor-checklist .inline-select > select {
+  min-width: 0;
 }
 
 .task-hero {
