@@ -1,4 +1,5 @@
 import { FormEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { BottomTabs } from "./components/BottomTabs";
 import { EntityEditorModal } from "./components/EntityEditorModal";
 import { FilterControl } from "./components/FilterControl";
@@ -84,6 +85,7 @@ function App() {
   const [isLogView, setIsLogView] = useState(() => typeof window !== "undefined" && window.location.hash === "#/logs");
   const app = useAppData();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const logScrollRef = useRef<HTMLDivElement>(null);
 
   const selectedNote = editor?.type === "note" && editor.id ? app.state.notes.find((n) => n.id === editor.id) : undefined;
   const selectedTask = editor?.type === "task" && editor.id ? app.state.tasks.find((t) => t.id === editor.id) : undefined;
@@ -93,6 +95,14 @@ function App() {
     editor?.type === "routine" && editor.id ? app.state.routines.find((r) => r.id === editor.id) : undefined;
   const selectedGoal = editor?.type === "goal" && editor.id ? app.state.goals.find((g) => g.id === editor.id) : undefined;
   const searchResults = useMemo(() => buildSearchResults(app, debouncedSearchQuery), [app, debouncedSearchQuery]);
+  const logRowVirtualizer = useVirtualizer({
+    count: app.state.logs.length,
+    getScrollElement: () => logScrollRef.current,
+    getItemKey: (index) => app.state.logs[index]?.id ?? index,
+    estimateSize: () => 96,
+    overscan: 8,
+  });
+  const logVirtualItems = logRowVirtualizer.getVirtualItems();
 
   useEffect(() => {
     const handleHashChange = () => setIsLogView(window.location.hash === "#/logs");
@@ -273,7 +283,7 @@ function App() {
                 current: Number.isFinite(metric.current) ? metric.current : 0,
                 target: Number.isFinite(metric.target) ? metric.target : 10,
               }))
-            : [{ id: "legacy_primary", name: g.metricName, current: g.metricCurrent, target: g.metricTarget }];
+            : [{ id: "metric_default", name: "Progress", current: 0, target: 10 }];
         const primaryMetric = nextMetrics.find((metric) => metric.id === input.primaryMetricId) ?? nextMetrics[0];
 
         return {
@@ -282,9 +292,6 @@ function App() {
           description: input.description ?? "",
           metrics: nextMetrics,
           primaryMetricId: primaryMetric.id,
-          metricName: primaryMetric.name,
-          metricCurrent: primaryMetric.current,
-          metricTarget: primaryMetric.target,
         };
       });
       return;
@@ -316,16 +323,30 @@ function App() {
             <h2>Complete Log</h2>
             <button onClick={handleCloseLogView}>Close</button>
           </div>
-          <div className="cards">
-            {app.state.logs.map((log) => (
-              <article key={log.id} className="card log">
-                <div className="title">{log.action}</div>
-                <div className="tags">
-                  {log.at.slice(0, 19).replace("T", " ")} | {log.entityType} {log.entityId ?? ""}
-                </div>
-                <div>{log.detail}</div>
-              </article>
-            ))}
+          <div className="log-view-list cards" ref={logScrollRef}>
+            <div style={{ height: logRowVirtualizer.getTotalSize(), position: "relative" }}>
+              {logVirtualItems.map((virtualRow) => {
+                const log = app.state.logs[virtualRow.index];
+                if (!log) return null;
+                return (
+                  <div
+                    key={virtualRow.key}
+                    ref={logRowVirtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    className="log-virtual-row"
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                  >
+                    <article className="card log">
+                      <div className="title">{log.action}</div>
+                      <div className="tags">
+                        {log.at.slice(0, 19).replace("T", " ")} | {log.entityType} {log.entityId ?? ""}
+                      </div>
+                      <div>{log.detail}</div>
+                    </article>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </section>
       </div>

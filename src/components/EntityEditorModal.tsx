@@ -19,9 +19,9 @@ function toMetricInputs(goal?: Goal): GoalMetricInput[] {
       : [
           {
             id: goal?.primaryMetricId ?? makeMetricId(),
-            name: goal?.metricName ?? "Progress",
-            current: goal?.metricCurrent ?? 0,
-            target: goal?.metricTarget ?? 10,
+            name: "Progress",
+            current: 0,
+            target: 10,
           },
         ];
 
@@ -80,7 +80,6 @@ export function EntityEditorModal({
   const [goalId, setGoalId] = useState("");
   const [projectId, setProjectId] = useState("");
   const [priority, setPriority] = useState("1");
-  const [importance, setImportance] = useState("3");
   const [goalMetrics, setGoalMetrics] = useState<GoalMetricInput[]>([{ id: makeMetricId(), name: "Progress", current: "0", target: "10" }]);
   const [primaryMetricId, setPrimaryMetricId] = useState("");
   const [currentMetricIndex, setCurrentMetricIndex] = useState(0);
@@ -98,7 +97,6 @@ export function EntityEditorModal({
     setGoalId(taskEntity?.goalId ?? projectEntity?.goalId ?? routineEntity?.goalId ?? "");
     setProjectId(taskEntity?.projectId ?? "");
     setPriority(String(taskEntity?.priority ?? 1));
-    setImportance(String(projectEntity?.importance ?? 3));
     if (type === "goal") {
       const metrics = toMetricInputs(goalEntity);
       setGoalMetrics(metrics);
@@ -152,7 +150,6 @@ export function EntityEditorModal({
         description,
         deadline: deadline || undefined,
         goalId: goalId || undefined,
-        importance: Number(importance) || 3,
       });
       close();
       return;
@@ -290,15 +287,6 @@ export function EntityEditorModal({
               Priority
               <input type="number" min={1} value={priority} onChange={(e) => setPriority(e.target.value)} />
             </label>
-          )}
-
-          {type === "project" && (
-            <>
-              <label className="inline-select">
-                Importance
-                <input type="number" min={1} max={5} value={importance} onChange={(e) => setImportance(e.target.value)} />
-              </label>
-            </>
           )}
 
           {type === "goal" && (

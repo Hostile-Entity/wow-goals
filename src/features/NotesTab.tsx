@@ -26,18 +26,24 @@ const NoteCard = memo(function NoteCard({ note, statusLabel, onManage, formatDat
 
   return (
     <article key={note.id} id={`item-note-${note.id}`} className={`card note-card ${cardToneClass}`}>
-      <div className="note-main">
-        <div className="title note-title">{note.title}</div>
-        {note.description ? <div className="note-description">{note.description}</div> : null}
-        <div className="tags note-status">
-          {statusLabel(note)}
-          {note.triagedTo ? ` -> ${note.triagedTo}` : ""}
+      <div className="card-top-row">
+        <div className="note-main">
+          <div className="title note-title">{note.title}</div>
+          {note.description ? <div className="note-description">{note.description}</div> : null}
+        </div>
+        <div className="note-side">
+          <button className="manage-btn" onClick={() => onManage(note)}>
+            Manage
+          </button>
         </div>
       </div>
-      <div className="note-side">
-        <button className="manage-btn" onClick={() => onManage(note)}>
-          Manage
-        </button>
+      <div className="card-footer">
+        <div className="card-footer-left">
+          <div className="tags note-status">
+            {statusLabel(note)}
+            {note.triagedTo ? ` -> ${note.triagedTo}` : ""}
+          </div>
+        </div>
         <div className="meta-row note-meta-time">
           {note.createdAt === note.updatedAt
             ? `Created ${formatDateTime(note.createdAt)}`

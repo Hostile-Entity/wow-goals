@@ -16,12 +16,8 @@ export interface Note extends BaseEntity {
 }
 
 export interface Goal extends BaseEntity {
-  metricName: string;
-  metricCurrent: number;
-  metricTarget: number;
-  metrics?: GoalMetric[];
-  primaryMetricId?: string;
-  isActive: boolean;
+  metrics: GoalMetric[];
+  primaryMetricId: string;
 }
 
 export interface GoalMetric {
@@ -34,7 +30,6 @@ export interface GoalMetric {
 export interface Project extends BaseEntity {
   goalId?: string;
   deadline?: string;
-  importance: number;
   isActive: boolean;
 }
 
@@ -49,7 +44,6 @@ export interface Task extends BaseEntity {
 
 export interface Routine extends BaseEntity {
   goalId?: string;
-  cadence: "daily";
 }
 
 export interface DailyCompletion {

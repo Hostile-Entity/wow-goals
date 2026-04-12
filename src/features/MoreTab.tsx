@@ -116,17 +116,24 @@ export function MoreTab({
 
               return (
                 <article key={routine.id} id={`item-routine-${routine.id}`} className={`card entity-card ${cardToneClass}`}>
-                  <div className="entity-main">
-                    <div className="title entity-title">{routine.title}</div>
-                    <div className="tags entity-summary">
-                      {routine.goalId ? `goal ${goalById.get(routine.goalId) ?? "Unknown"}` : "No goal linked"}
+                  <div className="card-top-row">
+                    <div className="entity-main">
+                      <div className="title entity-title">{routine.title}</div>
+                      {routine.description ? <div className="entity-description">{routine.description}</div> : null}
                     </div>
-                    <div className="tags entity-status">{statusLabel(routine)}</div>
+                    <div className="entity-side">
+                      <button className="manage-btn" onClick={() => onManageRoutine(routine)}>
+                        Manage
+                      </button>
+                    </div>
                   </div>
-                  <div className="entity-side">
-                    <button className="manage-btn" onClick={() => onManageRoutine(routine)}>
-                      Manage
-                    </button>
+                  <div className="card-footer">
+                    <div className="card-footer-left">
+                      <div className="tags entity-status entity-footer-meta">{statusLabel(routine)}</div>
+                      <div className="tags entity-summary entity-footer-meta">
+                        {routine.goalId ? `goal ${goalById.get(routine.goalId) ?? "Unknown"}` : "No goal linked"}
+                      </div>
+                    </div>
                     <div className="meta-row entity-meta-time">
                       {routine.createdAt === routine.updatedAt
                         ? `Created ${formatDateTime(routine.createdAt)}`
@@ -149,11 +156,8 @@ export function MoreTab({
           <div className="cards">
             {filteredGoals.map((goal) => {
               const pMetric = primaryMetric(goal);
-              const baseMetrics: GoalMetric[] =
-                goal.metrics && goal.metrics.length > 0
-                  ? goal.metrics
-                  : [{ id: goal.primaryMetricId ?? "legacy_primary", name: goal.metricName, current: goal.metricCurrent, target: goal.metricTarget }];
-              const primaryId = goal.primaryMetricId ?? pMetric.id;
+              const baseMetrics: GoalMetric[] = goal.metrics.length > 0 ? goal.metrics : [pMetric];
+              const primaryId = goal.primaryMetricId;
               const orderedMetrics = [...baseMetrics].sort((a, b) => {
                 if (a.id === primaryId) return -1;
                 if (b.id === primaryId) return 1;
@@ -163,35 +167,41 @@ export function MoreTab({
               const cardToneClass = bucket === "in_progress" ? "is-in-progress" : bucket !== "active" ? "is-dimmed" : "";
               return (
                 <article key={goal.id} id={`item-goal-${goal.id}`} className={`card entity-card ${cardToneClass}`}>
-                  <div className="entity-main">
-                    <div className="title entity-title">{goal.title}</div>
-                    <div className="goal-metric-stack">
-                      {orderedMetrics.map((metric) => {
-                        const progress = metric.target > 0 ? Math.min(100, Math.round((metric.current / metric.target) * 100)) : 0;
-                        return (
-                          <div key={metric.id} className="goal-metric-item">
-                            <div className="tags entity-summary">
-                              {metric.name}: {metric.current}/{metric.target} ({progress}%)
+                  <div className="card-top-row">
+                    <div className="entity-main">
+                      <div className="title entity-title">{goal.title}</div>
+                      <div className="goal-metric-stack">
+                        {orderedMetrics.map((metric) => {
+                          const progress = metric.target > 0 ? Math.min(100, Math.round((metric.current / metric.target) * 100)) : 0;
+                          return (
+                            <div key={metric.id} className="goal-metric-item">
+                              <div className="tags entity-summary">
+                                {metric.name}: {metric.current}/{metric.target} ({progress}%)
+                              </div>
+                              <div className="bar">
+                                <i style={{ width: `${progress}%` }} />
+                              </div>
                             </div>
-                            <div className="bar">
-                              <i style={{ width: `${progress}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                    <div className="tags entity-summary">
-                      linked: {linkedProjectCountByGoal.get(goal.id) ?? 0} projects, {linkedTaskCountByGoal.get(goal.id) ?? 0} tasks, {linkedRoutineCountByGoal.get(goal.id) ?? 0} routines
+                    <div className="entity-side">
+                      <button className="manage-btn" onClick={() => onManageGoal(goal)}>
+                        Manage
+                      </button>
+                      <button className="goal-charts-btn manage-btn" onClick={() => setChartsGoalId(goal.id)}>
+                        Charts
+                      </button>
                     </div>
-                    <div className="tags entity-status">{statusLabel(goal)}</div>
                   </div>
-                  <div className="entity-side">
-                    <button className="manage-btn" onClick={() => onManageGoal(goal)}>
-                      Manage
-                    </button>
-                    <button className="goal-charts-btn manage-btn" onClick={() => setChartsGoalId(goal.id)}>
-                      Charts
-                    </button>
+                  <div className="card-footer">
+                    <div className="card-footer-left">
+                      <div className="tags entity-status entity-footer-meta">{statusLabel(goal)}</div>
+                      <div className="tags entity-summary entity-footer-meta">
+                        linked: {linkedProjectCountByGoal.get(goal.id) ?? 0} projects, {linkedTaskCountByGoal.get(goal.id) ?? 0} tasks, {linkedRoutineCountByGoal.get(goal.id) ?? 0} routines
+                      </div>
+                    </div>
                     <div className="meta-row entity-meta-time">
                       {goal.createdAt === goal.updatedAt
                         ? `Created ${formatDateTime(goal.createdAt)}`

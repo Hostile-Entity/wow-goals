@@ -27,7 +27,7 @@
   --ok: var(--wow-green);
   --line: var(--wow-border-soft);
   --radius: 9px;
-  --tabs-height: 62px;
+  --tabs-height: 54px;
   --notes-composer-height: 60px;
   --notes-composer-live-height: 60px;
 }

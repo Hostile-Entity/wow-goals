@@ -23,19 +23,26 @@ export function TasksTab({ filteredTasks, goals, projects, statusLabel, onManage
 
         return (
           <article key={task.id} id={`item-task-${task.id}`} className={`card entity-card ${cardToneClass}`}>
-            <div className="entity-main">
-              <div className="title entity-title">{task.title}</div>
-              <div className="tags entity-summary">
-                {task.deadline ? `due ${task.deadline} | ` : ""}postponed {task.postponedCount}
-                {task.goalId ? ` | goal ${goalById.get(task.goalId) ?? "Unknown"}` : ""}
-                {task.projectId ? ` | project ${projectById.get(task.projectId) ?? "Unknown"}` : ""}
+            <div className="card-top-row">
+              <div className="entity-main">
+                <div className="title entity-title">{task.title}</div>
+                {task.description ? <div className="entity-description">{task.description}</div> : null}
               </div>
-              <div className="tags entity-status">{statusLabel(task)}</div>
+              <div className="entity-side">
+                <button className="manage-btn" onClick={() => onManage(task)}>
+                  Manage
+                </button>
+              </div>
             </div>
-            <div className="entity-side">
-              <button className="manage-btn" onClick={() => onManage(task)}>
-                Manage
-              </button>
+            <div className="card-footer">
+              <div className="card-footer-left">
+                <div className="tags entity-status entity-footer-meta">{statusLabel(task)}</div>
+                <div className="tags entity-summary entity-footer-meta">
+                  {task.deadline ? `due ${task.deadline} | ` : ""}postponed {task.postponedCount}
+                  {task.goalId ? ` | goal ${goalById.get(task.goalId) ?? "Unknown"}` : ""}
+                  {task.projectId ? ` | project ${projectById.get(task.projectId) ?? "Unknown"}` : ""}
+                </div>
+              </div>
               <div className="meta-row entity-meta-time">
                 {task.createdAt === task.updatedAt
                   ? `Created ${formatDateTime(task.createdAt)}`
