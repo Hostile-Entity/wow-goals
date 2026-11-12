@@ -94,9 +94,6 @@
   width: 100%;
 }
 
-.editor-save-row.is-edit {
-  justify-content: flex-end;
-}
 
 .goal-metric-footer {
   justify-content: space-between;
@@ -734,3 +731,53 @@
 .manage-btn, .note-side button, .today-task-actions button, .filter-btn, .filter-menu button, .more-tabs button { min-height: 44px; }
 .routine-btn:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+
+.cards { gap: 12px; }
+.card { padding: 18px; }
+.title { font-size: 1rem; line-height: 1.5; font-weight: 650; margin-bottom: 6px; }
+.tags, .meta-row { font-size: .8rem; line-height: 1.5; }
+.card-footer { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 12px; margin-top: 8px; }
+.card-footer-left { flex: 1 1 140px; }
+.item-timestamp { margin-left: auto; text-align: right; max-width: 100%; font-size: .72rem; color: var(--muted); }
+.item-timestamp time { white-space: nowrap; }
+.tags:empty { display: none; }
+.entity-side { gap: 6px; }
+.manage-btn, .complete-task-btn { font-size: .8rem; min-width: 64px; margin-bottom: 0; }
+.entity-description, .note-description { color: var(--muted); font-size: .9rem; }
+.complete-task-btn { color: var(--accent-2); }
+.today-header { padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.today-header h2 { margin-bottom: 4px; }
+.today-header p { margin: 0 0 18px; }
+.today-task-card { margin-bottom: 4px; }
+.today-task-link { min-height: 44px; line-height: 1.5; }
+.today-tab > .row { margin-top: 12px; }
+.review-grid { --review-grid-row-size: 44px; }
+:root[data-theme="light"] .card, :root[data-theme="light"] .checklist, :root[data-theme="light"] .review-grid-wrap { border-color: var(--line); }
+:root[data-theme="light"] .is-dimmed { filter: none; border-color: var(--line); background: var(--panel-alt); box-shadow: none; }
+:root[data-theme="light"] .is-dimmed .title { color: var(--text); }
+:root[data-theme="light"] .is-in-progress { border-left: 3px solid var(--accent-2); background: var(--panel); box-shadow: none; }
+:root[data-theme="light"] .bar { height: 6px; border: 0; background: var(--line); }
+:root[data-theme="light"] .bar i { background: var(--accent-2); }
+:root[data-theme="light"] .routine-btn.is-pending { filter: none; background: var(--panel); border-color: var(--line); }
+:root[data-theme="light"] .routine-btn.is-done { background: var(--button-bg-active); border-color: var(--accent-2); box-shadow: none; }
+:root[data-theme="light"] .metric-chart { background: var(--panel-alt); }
+
+/* Editor rules belong after the shared checklist styles to avoid reintroducing
+   desktop-style side labels and nested boxes on phones. */
+.entity-editor .editor-checklist { border: 0; padding: 0; background: transparent; box-shadow: none; }
+.entity-editor .editor-fields { gap: 20px; }
+.entity-editor .editor-group { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: 12px; }
+.entity-editor .editor-group legend { padding: 0; margin-bottom: 10px; font-size: .85rem; color: var(--muted); font-weight: 600; }
+.entity-editor .editor-checklist .inline-select { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 5px; font-size: .85rem; }
+.entity-editor .editor-checklist .field-label { white-space: normal; overflow: visible; }
+.entity-editor .editor-schedule { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.entity-editor .editor-schedule > :last-child:nth-of-type(odd) { grid-column: 1 / -1; }
+.entity-editor .editor-checklist .meta { margin: 0; }
+.entity-editor .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.entity-editor .actions button { width: 100%; min-height: 48px; font-size: .85rem; padding: 10px 12px; }
+.entity-editor .lifecycle-actions { padding-top: 16px; border-top: 1px solid var(--line); }
+.entity-editor .copy-note .meta:empty { display: none; }
+.entity-editor .entity-metadata { margin-top: 4px; padding-bottom: 0; }
+@media (max-width: 360px) {
+  .entity-editor .editor-schedule { grid-template-columns: minmax(0, 1fr); }
+}

@@ -2,14 +2,13 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AppData, getStatusBucket } from "../state/useAppData";
 import { Note } from "../types";
-import { Dialog } from "../components/Dialog";
+import { ItemTimestamp } from "../components/ItemTimestamp";
 
 interface NotesTabProps {
   filteredNotes: AppData["filteredNotes"];
   showStatus: boolean;
   statusLabel: AppData["statusLabel"];
   onManage(note: Note): void;
-  formatDateTime(iso: string): string;
   ensureVisibleItemId?: string | null;
 }
 
@@ -20,10 +19,6 @@ interface NoteCardProps {
   showStatus: boolean;
   statusLabel: AppData["statusLabel"];
   onManage(note: Note): void;
-  formatDateTime(iso: string): string;
-  selected: boolean;
-  onSelect(): void;
-  onCopy(): void;
 }
 
 const NoteCard = memo(function NoteCard({
@@ -31,10 +26,6 @@ const NoteCard = memo(function NoteCard({
   showStatus,
   statusLabel,
   onManage,
-  formatDateTime,
-  selected,
-  onSelect,
-  onCopy,
 }: NoteCardProps) {
   const bucket = getStatusBucket(note);
   const cardToneClass =
@@ -60,22 +51,10 @@ const NoteCard = memo(function NoteCard({
         <div className="note-side">
           <button
             className="manage-btn"
-            aria-pressed={selected}
-            aria-label={`${selected ? "Deselect" : "Select"} note ${note.title}`}
-            onClick={onSelect}
+            onClick={() => onManage(note)}
           >
-            {selected ? "Deselect" : "Select"}
+            Edit
           </button>
-          {selected && (
-            <div
-              role="toolbar"
-              aria-label="Selected note actions"
-              className="actions"
-            >
-              <button onClick={onCopy}>Copy</button>
-              <button onClick={() => onManage(note)}>Manage</button>
-            </div>
-          )}
         </div>
       </div>
       <div className="card-footer">
@@ -84,16 +63,12 @@ const NoteCard = memo(function NoteCard({
             <div className="tags note-status">
               {showStatus ? statusLabel(note) : ""}
               {note.triagedTo
-                ? `${showStatus ? " -> " : "triaged to "}${note.triagedTo}`
+                ? `${showStatus ? " → " : "Converted to "}${note.triagedTo}`
                 : ""}
             </div>
           ) : null}
         </div>
-        <div className="meta-row note-meta-time">
-          {note.createdAt === note.updatedAt
-            ? `Created ${formatDateTime(note.createdAt)}`
-            : `Updated ${formatDateTime(note.updatedAt)}`}
-        </div>
+        <ItemTimestamp entity={note} />
       </div>
     </article>
   );
@@ -104,29 +79,9 @@ export function NotesTab({
   showStatus,
   statusLabel,
   onManage,
-  formatDateTime,
   ensureVisibleItemId,
 }: NotesTabProps) {
   const [visibleCount, setVisibleCount] = useState(NOTES_PAGE_SIZE);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [copyMessage, setCopyMessage] = useState("");
-  const [manualCopy, setManualCopy] = useState<string | null>(null);
-  useEffect(() => {
-    if (selectedId && !filteredNotes.some((note) => note.id === selectedId))
-      setSelectedId(null);
-  }, [filteredNotes, selectedId]);
-  async function copy(note: Note) {
-    const text = note.title + (note.description ? `\n${note.description}` : "");
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopyMessage(`Copied ${note.title}`);
-    } catch {
-      setManualCopy(text);
-      setCopyMessage(
-        "Clipboard access was unavailable. Select and copy the text in the dialog.",
-      );
-    }
-  }
 
   useEffect(() => {
     setVisibleCount(NOTES_PAGE_SIZE);
@@ -186,9 +141,6 @@ export function NotesTab({
 
   return (
     <div className="cards notes-virtual-wrap">
-      <div className="meta" role="status">
-        {copyMessage}
-      </div>
       <div
         style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}
       >
@@ -208,32 +160,11 @@ export function NotesTab({
                 showStatus={showStatus}
                 statusLabel={statusLabel}
                 onManage={onManage}
-                formatDateTime={formatDateTime}
-                selected={selectedId === note.id}
-                onSelect={() =>
-                  setSelectedId(selectedId === note.id ? null : note.id)
-                }
-                onCopy={() => void copy(note)}
               />
             </div>
           );
         })}
       </div>
-      {manualCopy !== null && (
-        <Dialog title="Copy note" close={() => setManualCopy(null)}>
-          <p>
-            Clipboard permission was unavailable. Select and copy this complete
-            message:
-          </p>
-          <textarea
-            aria-label="Message to copy"
-            readOnly
-            value={manualCopy}
-            rows={8}
-            onFocus={(event) => event.target.select()}
-          />
-        </Dialog>
-      )}
       <div className="meta notes-virtual-meta">
         {hasMore
           ? `Loaded ${visibleNotes.length}/${filteredNotes.length}. Scroll for more...`

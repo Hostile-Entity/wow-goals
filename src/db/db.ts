@@ -16,6 +16,7 @@ import {
   DB_VERSION,
   emptyData,
   migrateV1,
+  migrateV2,
 } from "./schema";
 
 export type StoreName =
@@ -156,6 +157,7 @@ function openAtVersion(name: string, version?: number): Promise<IDBDatabase> {
     };
     request.onupgradeneeded = (event) => {
       const db = request.result;
+      const wasV2 = db.objectStoreNames.contains("meta");
       ensureStores(db);
       const tx = request.transaction!;
       if (event.oldVersion === 0) {
@@ -175,26 +177,33 @@ function openAtVersion(name: string, version?: number): Promise<IDBDatabase> {
           remaining -= 1;
           if (remaining) return;
           try {
-            const next = migrateV1(snapshot);
+            const next = wasV2 ? migrateV2(snapshot) : migrateV1(snapshot);
             tx.objectStore("meta").put({
-              id: "pre-v2",
+              id: "pre-v4",
               at: new Date().toISOString(),
-              data: { app: "wow-goals", schemaVersion: 1, data: snapshot },
+              data: { app: "wow-goals", schemaVersion: wasV2 ? ("listDensity" in snapshot.settings ? 3 : 2) : 1, data: snapshot },
             });
-            tx.objectStore("meta").put({
-              id: "migration",
-              at: new Date().toISOString(),
-              data: {
-                priorities: snapshot.tasks.map((task) => ({
-                  id: task.id,
-                  from: task.priority,
-                  to: next.tasks.find((t) => t.id === task.id)!.priority,
-                })),
-              },
-            });
-            for (const storeName of dataStores)
-              for (const row of next[storeName])
-                put(tx.objectStore(storeName), row);
+            if (!wasV2) {
+              tx.objectStore("meta").put({
+                id: "pre-v2",
+                at: new Date().toISOString(),
+                data: { app: "wow-goals", schemaVersion: 1, data: snapshot },
+              });
+              tx.objectStore("meta").put({
+                id: "migration",
+                at: new Date().toISOString(),
+                data: {
+                  priorities: snapshot.tasks.map((task) => ({
+                    id: task.id,
+                    from: task.priority,
+                    to: next.tasks.find((t) => t.id === task.id)!.priority,
+                  })),
+                },
+              });
+              for (const storeName of dataStores)
+                for (const row of next[storeName])
+                  put(tx.objectStore(storeName), row);
+            }
             put(tx.objectStore("settings"), next.settings);
           } catch (error) {
             migrationError = error;
@@ -217,7 +226,20 @@ function openAtVersion(name: string, version?: number): Promise<IDBDatabase> {
         db.close();
         dbPromise = null;
       };
-      resolve(db);
+      // Some legacy installations used a higher physical version to repair
+      // stores. Detect the new preference too, rather than trusting that number.
+      const settings = db.transaction("settings").objectStore("settings").get("settings");
+      settings.onsuccess = () => {
+        if (settings.result && settings.result.listDensity !== "comfortable") {
+          const nextVersion = db.version + 1;
+          db.close();
+          void openAtVersion(name, nextVersion).then(resolve, reject);
+        } else resolve(db);
+      };
+      settings.onerror = () => {
+        db.close();
+        reject(settings.error);
+      };
     };
     request.onerror = () => {
       if (request.error?.name === "VersionError")

@@ -8,6 +8,7 @@ import {
 import { ReviewTab } from "./ReviewTab";
 import { EntityType, Goal, Routine } from "../types";
 import { isOpen } from "../state/lifecycle";
+import { ItemTimestamp } from "../components/ItemTimestamp";
 
 interface MoreTabProps {
   notes: AppData["state"]["notes"];
@@ -42,7 +43,6 @@ interface MoreTabProps {
   renderFilterControl(key: FilterKey): ReactNode;
   onManageRoutine(routine: Routine): void;
   onManageGoal(goal: Goal): void;
-  formatDateTime(iso: string): string;
 }
 
 export function MoreTab({
@@ -71,7 +71,6 @@ export function MoreTab({
   renderFilterControl,
   onManageRoutine,
   onManageGoal,
-  formatDateTime,
 }: MoreTabProps) {
   const goalById = useMemo(
     () => new Map(goals.map((goal) => [goal.id, goal.title])),
@@ -155,7 +154,7 @@ export function MoreTab({
                         className="manage-btn"
                         onClick={() => onManageRoutine(routine)}
                       >
-                        Manage
+                        Edit
                       </button>
                     </div>
                   </div>
@@ -169,14 +168,10 @@ export function MoreTab({
                       <div className="tags entity-summary entity-footer-meta">
                         {routine.goalId
                           ? `goal ${goalById.get(routine.goalId) ?? "Unknown"}`
-                          : "No goal linked"}
+                          : ""}
                       </div>
                     </div>
-                    <div className="meta-row entity-meta-time">
-                      {routine.createdAt === routine.updatedAt
-                        ? `Created ${formatDateTime(routine.createdAt)}`
-                        : `Updated ${formatDateTime(routine.updatedAt)}`}
-                    </div>
+                    <ItemTimestamp entity={routine} />
                   </div>
                 </article>
               );
@@ -240,13 +235,7 @@ export function MoreTab({
                         className="manage-btn"
                         onClick={() => onManageGoal(goal)}
                       >
-                        Manage
-                      </button>
-                      <button
-                        className="goal-charts-btn manage-btn"
-                        onClick={() => onManageGoal(goal)}
-                      >
-                        Update
+                        Open
                       </button>
                     </div>
                   </div>
@@ -264,11 +253,7 @@ export function MoreTab({
                         {linkedRoutineCountByGoal.get(goal.id) ?? 0} routines
                       </div>
                     </div>
-                    <div className="meta-row entity-meta-time">
-                      {goal.createdAt === goal.updatedAt
-                        ? `Created ${formatDateTime(goal.createdAt)}`
-                        : `Updated ${formatDateTime(goal.updatedAt)}`}
-                    </div>
+                    <ItemTimestamp entity={goal} />
                   </div>
                 </article>
               );

@@ -6,6 +6,8 @@ import { Dialog } from "./Dialog";
 import { EntityActions } from "./EntityActions";
 import { GoalMetricChartsModal } from "./GoalMetricChartsModal";
 import { useAction } from "./useAction";
+import { ConversionContext, ConversionNotice } from "./ConversionNotice";
+import { EntityMetadata } from "./EntityMetadata";
 
 export function GoalDetailModal({
   goal,
@@ -13,12 +15,14 @@ export function GoalDetailModal({
   edit,
   open,
   close,
+  conversion,
 }: {
   goal: Goal;
   app: AppData;
   edit(): void;
   open(type: EntityType, id: string): void;
   close(): void;
+  conversion?: ConversionContext;
 }) {
   const [charts, setCharts] = useState(false);
   const [value, setValue] = useState(String(app.primaryMetric(goal).current));
@@ -39,6 +43,7 @@ export function GoalDetailModal({
       dirty={dirty}
       busy={action.pending || app.busy}
     >
+      <ConversionNotice context={conversion} beforeAction={guard} />
       <p className="entity-description">{goal.description}</p>
       <div className="actions">
         <button
@@ -118,11 +123,12 @@ export function GoalDetailModal({
                 if (guard()) open(row.type, row.id);
               }}
             >
-              {row.title} · {row.status}
+              {row.title} · {app.statusLabel(row)}
             </button>
           ))}
       </details>
       <EntityActions type="goal" entity={goal} app={app} beforeAction={guard} />
+      <EntityMetadata entity={goal} />
       {charts && (
         <GoalMetricChartsModal
           goal={goal}

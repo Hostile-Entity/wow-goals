@@ -39,6 +39,7 @@ import {
   projectTodoCommand,
   triageCommand,
   undoTriageCommand,
+  undoTaskCompletionCommand,
   updateCommand,
 } from "./commands";
 import {
@@ -53,6 +54,7 @@ import {
   sortItems,
   sortTasks,
   StatusFilter,
+  statusLabel,
 } from "./lifecycle";
 import { projectTodos } from "./projectTodos";
 import { useDeviceUI } from "./useDeviceUI";
@@ -365,12 +367,15 @@ export function useAppData() {
     ]);
   }
   async function triageNote(note: Note, to: Exclude<EntityType, "note">) {
-    await mutate(["notes", entityStores[to]], (records) =>
+    const changes = await mutate(["notes", entityStores[to]], (records) =>
       triageCommand(records, note, to, logicalDay),
     );
-    notify("Note converted. Open the processed note to view its result.", () =>
+    notify(`Note converted to ${to}.`, () =>
       undoTriage(note.id),
     );
+    const destination = changes.find(change => change.store === entityStores[to] && "row" in change);
+    if (!destination || !("row" in destination)) throw new Error("Conversion result unavailable.");
+    return destination.row.id;
   }
   async function undoTriage(id: string) {
     await mutate(
@@ -380,9 +385,22 @@ export function useAppData() {
     notify("Conversion undone. Your edited note was kept.");
   }
   async function completeTask(id: string) {
-    await mutate(["tasks", "completions"], (records) =>
-      completeTaskCommand(records, id, logicalDay),
-    );
+    let previousStatus: ItemStatus = "open";
+    const changes = await mutate(["tasks", "completions"], (records) => {
+      previousStatus = findEntity(records, "task", id).status;
+      return completeTaskCommand(records, id, logicalDay);
+    });
+    const taskChange = changes.find(c => c.store === "tasks" && "row" in c);
+    const completion = changes.find(c => c.store === "completions" && "row" in c);
+    if (taskChange && "row" in taskChange && "updatedAt" in taskChange.row && completion && "row" in completion) {
+      const revision = taskChange.row.updatedAt;
+      const completionId = completion.row.id;
+      notify("Task completed.", async () => {
+        await mutate(["tasks", "completions"], records =>
+          undoTaskCompletionCommand(records, id, revision, completionId, previousStatus, logicalDay));
+        notify("Task completion undone.");
+      });
+    }
   }
   async function postponeTask(id: string, until = addDays(logicalDay, 1)) {
     let previous: Task;
@@ -483,8 +501,10 @@ export function useAppData() {
         : {}),
     }));
   }
-  const discardEntity = (type: EntityType, id: string) =>
-    updateEntity(type, id, (row) => ({ ...row, status: "discarded" }));
+  async function discardEntity(type: EntityType, id: string) {
+    if (!window.confirm(`Move this ${type} to Trash? You can recover it later.`)) return;
+    await updateEntity(type, id, row => ({ ...row, status: "discarded" }));
+  }
   const recoverEntity = (type: EntityType, id: string) =>
     updateEntity(type, id, (row) => ({ ...row, status: initialStatus[type] }));
   async function permanentDelete(type: EntityType, id: string) {
@@ -656,13 +676,13 @@ export function useAppData() {
     download(backupPayload(data), `wow-goals-backup-${logicalDay}.json`);
     await setSettings({ lastBackupAt: nowIso() });
   }
-  async function exportSafetySnapshot(which: "pre-v2" | "pre-import") {
+  async function exportSafetySnapshot(which: "pre-v2" | "pre-v3" | "pre-v4" | "pre-import") {
     const saved = await getById("meta", which);
     if (!saved?.data) {
       throw new Error("No safety snapshot exists yet.");
     }
     download(
-      which === "pre-v2"
+      which !== "pre-import"
         ? saved.data
         : backupPayload(saved.data as AppStateData),
       `wow-goals-${which}.json`,
@@ -733,7 +753,7 @@ export function useAppData() {
     )
     .slice(0, 3);
   const urgentTasks = activeTasks.filter(
-    (task) => task.deadline && task.deadline <= logicalDay,
+    (task) => task.deadline && task.deadline <= logicalDay && !todayTop3.some(focus => focus.id === task.id),
   );
   const primaryMetric = (goal: Goal) =>
     goal.metrics.find((metric) => metric.id === goal.primaryMetricId) ??
@@ -827,7 +847,7 @@ export function useAppData() {
         !settings.focusTaskIds.includes(task.id) &&
         (!task.scheduledFor || task.scheduledFor <= logicalDay),
     ),
-    statusLabel: (row: Pick<BaseEntity, "status">) => row.status,
+    statusLabel: (row: Pick<BaseEntity, "status">) => statusLabel(row.status),
     addNote,
     updateEntity,
     createTask,

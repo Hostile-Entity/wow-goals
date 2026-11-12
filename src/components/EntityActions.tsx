@@ -1,6 +1,6 @@
 import { BaseEntity, EntityType } from "../types";
 import { AppData } from "../state/useAppData";
-import { lifecycle } from "../state/lifecycle";
+import { lifecycle, statusLabel } from "../state/lifecycle";
 import { useAction } from "./useAction";
 
 export function EntityActions({
@@ -47,8 +47,8 @@ export function EntityActions({
                   : status === "achieved"
                     ? "Achieve goal"
                     : entity.status === "done" || entity.status === "achieved"
-                      ? `Reopen as ${status}`
-                      : `Mark ${status}`}
+                       ? `Reopen as ${statusLabel(status)}`
+                       : `Mark ${statusLabel(status)}`}
               </button>
             ))}
         {entity.status === "discarded" ? (

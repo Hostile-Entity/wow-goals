@@ -1,7 +1,7 @@
 import { AppSettings, AppStateData } from "../types";
 
 export const DB_NAME = "wow-goals-db";
-export const DB_VERSION = 2;
+export const DB_VERSION = 4;
 export const dataStores = [
   "notes",
   "tasks",
@@ -19,6 +19,7 @@ export const defaultSettings: AppSettings = {
   soundVolume: 0,
   showStatus: false,
   theme: "light",
+  listDensity: "comfortable",
   focusTaskIds: [],
 };
 export const emptyData = (): AppStateData => ({
@@ -32,6 +33,13 @@ export const emptyData = (): AppStateData => ({
   logs: [],
   settings: { ...defaultSettings, focusTaskIds: [] },
 });
+
+/** v2/v3 -> current: comfortable is now the only layout. Records stay untouched. */
+export function migrateV2(data: AppStateData): AppStateData {
+  const next = structuredClone(data);
+  next.settings = { ...defaultSettings, ...next.settings, listDensity: "comfortable" };
+  return next;
+}
 
 /** Single v1 -> v2 transition. Never reinterpret or normalize legacy text/history. */
 export function migrateV1(data: AppStateData): AppStateData {

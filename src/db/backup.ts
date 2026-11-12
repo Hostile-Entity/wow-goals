@@ -1,6 +1,6 @@
 import { AppStateData, EntityType } from "../types";
 import { entityStores, lifecycle } from "../state/lifecycle";
-import { dataStores, DB_VERSION, migrateV1 } from "./schema";
+import { dataStores, DB_VERSION, migrateV1, migrateV2 } from "./schema";
 
 export const backupPayload = (data: AppStateData) => ({
   app: "wow-goals" as const,
@@ -26,7 +26,7 @@ export function parseBackup(raw: unknown): AppStateData {
   if (
     !object(raw) ||
     raw.app !== "wow-goals" ||
-    ![1, DB_VERSION].includes(raw.schemaVersion) ||
+    ![1, 2, 3, DB_VERSION].includes(raw.schemaVersion) ||
     !object(raw.data)
   )
     fail("wrong app or unsupported schema");
@@ -55,7 +55,7 @@ export function parseBackup(raw: unknown): AppStateData {
       if (!statuses.includes(row.status)) fail(`${type} has invalid status`);
       if (row.deadline !== undefined && !day(row.deadline))
         fail("invalid deadline");
-      if (type === "project" && raw.schemaVersion === 2 && !text(row.summary))
+      if (type === "project" && raw.schemaVersion >= 2 && !text(row.summary))
         fail("project has no short description");
       if (row.completedAt !== undefined && !dateTime(row.completedAt))
         fail("invalid completion timestamp");
@@ -80,7 +80,7 @@ export function parseBackup(raw: unknown): AppStateData {
     if (
       !Number.isInteger(task.priority) ||
       task.priority < 1 ||
-      (raw.schemaVersion === 2 && task.priority > 3) ||
+      (raw.schemaVersion >= 2 && task.priority > 3) ||
       !Number.isInteger(task.postponedCount) ||
       task.postponedCount < 0
     )
@@ -157,13 +157,16 @@ export function parseBackup(raw: unknown): AppStateData {
   if (s.lastBackupAt !== undefined && !dateTime(s.lastBackupAt))
     fail("invalid backup timestamp");
   if (
-    raw.schemaVersion === 2 &&
+    raw.schemaVersion >= 2 &&
     (!Array.isArray(s.focusTaskIds) ||
       s.focusTaskIds.length > 3 ||
       !s.focusTaskIds.every(text) ||
       new Set(s.focusTaskIds).size !== s.focusTaskIds.length)
   )
     fail("invalid focus list");
+  if ((raw.schemaVersion === 3 && !["compact", "comfortable"].includes(s.listDensity)) ||
+      (raw.schemaVersion >= 4 && s.listDensity !== "comfortable"))
+    fail("invalid list density");
   for (const group of ["tasks", "projects", "routines"])
     for (const row of data[group]) {
       if (row.goalId !== undefined && !text(row.goalId))
@@ -174,7 +177,9 @@ export function parseBackup(raw: unknown): AppStateData {
   // Dangling legacy references can result from permanent deletion. Preserve and report them, never erase their records.
   return raw.schemaVersion === 1
     ? migrateV1(data as AppStateData)
-    : (structuredClone(data) as AppStateData);
+    : raw.schemaVersion === 2 || raw.schemaVersion === 3
+      ? migrateV2(data as AppStateData)
+      : (structuredClone(data) as AppStateData);
 }
 
 export function danglingReferences(data: AppStateData): number {

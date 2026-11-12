@@ -99,6 +99,7 @@ export interface AppSettings {
   soundVolume: number;
   showStatus: boolean;
   theme: "light" | "wow";
+  listDensity: "comfortable";
   focusTaskIds: string[];
   lastBackupAt?: string;
 }

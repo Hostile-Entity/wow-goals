@@ -5,7 +5,7 @@ import { useAction } from "./useAction";
 interface SettingsModalProps {
   lastBackupAt?: string;
   backupDue: boolean;
-  exportSafetySnapshot(which: "pre-v2" | "pre-import"): Promise<void>;
+  exportSafetySnapshot(which: "pre-v2" | "pre-v3" | "pre-v4" | "pre-import"): Promise<void>;
   showDebugTools: boolean;
   setShowDebugTools(next: boolean): void;
   swVersion: string;
@@ -142,6 +142,9 @@ export function SettingsModal({
             once.
           </p>
           <div className="actions">
+            <button onClick={() => void action.run(() => exportSafetySnapshot("pre-v4"))}>
+              Export pre-interface-upgrade data
+            </button>
             <button
               onClick={() =>
                 void action.run(() => exportSafetySnapshot("pre-v2"))

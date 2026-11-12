@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { AppData, formatDueLabel, getStatusBucket } from "../state/useAppData";
 import { Task } from "../types";
 import { priorityLabel } from "../state/lifecycle";
+import { useAction } from "../components/useAction";
+import { ItemTimestamp } from "../components/ItemTimestamp";
 
 interface TasksTabProps {
   filteredTasks: AppData["filteredTasks"];
@@ -11,7 +13,7 @@ interface TasksTabProps {
   showStatus: boolean;
   statusLabel: AppData["statusLabel"];
   onManage(task: Task): void;
-  formatDateTime(iso: string): string;
+  onComplete(id: string): Promise<void>;
 }
 
 export function TasksTab({
@@ -22,8 +24,9 @@ export function TasksTab({
   showStatus,
   statusLabel,
   onManage,
-  formatDateTime,
+  onComplete,
 }: TasksTabProps) {
+  const action = useAction();
   const goalById = useMemo(
     () => new Map(goals.map((goal) => [goal.id, goal.title])),
     [goals],
@@ -34,7 +37,8 @@ export function TasksTab({
   );
 
   return (
-    <div className="cards">
+    <div className="cards task-list">
+      {action.error && <p className="action-error" role="alert">{action.error}</p>}
       {filteredTasks.map((task) => {
         const bucket = getStatusBucket(task);
         const cardToneClass =
@@ -59,8 +63,11 @@ export function TasksTab({
               </div>
               <div className="entity-side">
                 <button className="manage-btn" onClick={() => onManage(task)}>
-                  Manage
+                  Edit
                 </button>
+                {!["done", "discarded"].includes(task.status) &&
+                  <button className="complete-task-btn" aria-label={`Complete ${task.title}`} disabled={action.pending}
+                    onClick={() => void action.run(() => onComplete(task.id))}>Done</button>}
               </div>
             </div>
             <div className="card-footer">
@@ -71,25 +78,16 @@ export function TasksTab({
                   </div>
                 ) : null}
                 <div className="tags entity-summary entity-footer-meta">
-                  {priorityLabel(task.priority)} |{" "}
-                  {task.deadline
-                    ? `${formatDueLabel(task.deadline, logicalDay)} | `
-                    : ""}
-                  postponed {task.postponedCount}
-                  {task.scheduledFor ? ` | scheduled ${task.scheduledFor}` : ""}
-                  {task.goalId
-                    ? ` | goal ${goalById.get(task.goalId) ?? "Unknown"}`
-                    : ""}
-                  {task.projectId
-                    ? ` | project ${projectById.get(task.projectId) ?? "Unknown"}`
-                    : ""}
+                  {[
+                    task.priority !== 2 && priorityLabel(task.priority),
+                    task.deadline && formatDueLabel(task.deadline, logicalDay),
+                    task.scheduledFor && `Planned for ${task.scheduledFor}`,
+                    task.projectId && (projectById.get(task.projectId) ?? "Unknown project"),
+                    task.goalId && (goalById.get(task.goalId) ?? "Unknown goal"),
+                  ].filter(Boolean).join(" · ")}
                 </div>
               </div>
-              <div className="meta-row entity-meta-time">
-                {task.createdAt === task.updatedAt
-                  ? `Created ${formatDateTime(task.createdAt)}`
-                  : `Updated ${formatDateTime(task.updatedAt)}`}
-              </div>
+              <ItemTimestamp entity={task} />
             </div>
           </article>
         );

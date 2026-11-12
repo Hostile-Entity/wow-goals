@@ -153,7 +153,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 0;
 }
 
 .settings-volume-row {
@@ -177,3 +177,78 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   grid-template-columns: repeat(2, minmax(0, 1fr));
   width: 100%;
 }
+
+.topbar { min-height: 72px; padding: 14px 20px; }
+.settings-btn, .filter-btn, .filter-menu button { font-size: .85rem; }
+.meta { font-size: .85rem; }
+.filter-menu { min-width: 160px; }
+.modal { width: min(620px, calc(100% - 28px)); padding: 22px; max-height: 90dvh; }
+.modal > .card-top { position: sticky; top: -22px; background: var(--panel); z-index: 3; padding: 12px 0; }
+.modal > .card-top h3 { font-size: 1.2rem; }
+.entity-metadata { padding: 12px 0; color: var(--muted); font-size: .85rem; }
+.entity-metadata summary { cursor: pointer; }
+.conversion-notice { padding: 12px 16px; border-radius: 10px; background: var(--button-bg-active); border: 1px solid var(--line); }
+.conversion-notice p { margin: 0 0 10px; font-size: .85rem; }
+.copy-note { margin: 12px 0; }
+:root[data-theme="light"] .topbar { border-color: var(--line); box-shadow: none; }
+:root[data-theme="light"] .filter-menu { background: var(--panel); border-color: var(--line); box-shadow: 0 8px 30px #20332a12; }
+:root[data-theme="light"] dialog.modal { border-color: var(--line); box-shadow: 0 24px 80px #20332a24; }
+:root[data-theme="light"] dialog.modal::backdrop { background: #16281e66; backdrop-filter: blur(3px); }
+:root[data-theme="light"] .meta { color: var(--muted); }
+@media (max-width: 500px) {
+  .modal { padding: 16px; }
+  .modal > .card-top { top: -16px; }
+  .topbar { padding: 12px 14px; }
+}
+
+.modal-body { display: grid; gap: 14px; min-width: 0; }
+/* Full-height, one-scroll editor. Header/footer never cover editable content. */
+dialog.entity-editor {
+  position: fixed;
+  inset: var(--dialog-top, 0px) 0 auto;
+  width: min(620px, 100%);
+  max-width: 100%;
+  height: var(--dialog-height, 100dvh);
+  max-height: var(--dialog-height, 100dvh);
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  gap: 0;
+}
+.entity-editor > .card-top {
+  position: static;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.entity-editor > .card-top h3 { margin: 0; font-size: 1.15rem; line-height: 1.4; }
+.entity-editor > .modal-body {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-padding: 16px;
+  padding: 16px;
+}
+.entity-editor > .modal-body > * + * { margin-top: 16px; }
+.entity-editor > .modal-footer {
+  flex: 0 0 auto;
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+.entity-editor > .modal-footer button { width: 100%; min-height: 48px; font-size: 1rem; }
+.entity-editor input:not([type=checkbox]), .entity-editor textarea, .entity-editor select {
+  font-size: 16px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+}
+.entity-editor input[type=date] { display: block; width: 100%; }

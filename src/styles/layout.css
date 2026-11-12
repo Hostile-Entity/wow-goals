@@ -214,3 +214,37 @@ h3 {
     grid-template-columns: 1fr;
   }
 }
+
+/* A wider canvas on desktop; the same five destinations remain unchanged. */
+.main { display: block; padding: 0 20px calc(var(--tabs-height) + 20px); }
+.main > .action-error, .main > .app-notice { margin-bottom: 16px; }
+.sticky-head { top: 0; padding: 12px 20px; margin: 0 -20px 18px; }
+h2 { font-size: 1.5rem; letter-spacing: -.035em; margin-bottom: 14px; }
+h3 { font-size: 1rem; margin: 24px 0 12px; }
+.sticky-head > h2, .sticky-head > h3 { font-size: 1.25rem; line-height: 1.4; }
+.tabs { max-width: 760px; left: 50%; transform: translateX(-50%); }
+.tabs button { min-height: 48px; text-transform: none; letter-spacing: 0; font-size: .85rem; }
+.notes-composer { padding: 12px 16px; }
+.notes-composer button { height: 44px; }
+.notes-composer textarea { min-height: 44px; }
+:root[data-theme="light"] .app { border: 0; border-radius: 0; }
+:root[data-theme="light"] .sticky-head { background: var(--panel); box-shadow: none; backdrop-filter: none; border-color: var(--line); }
+:root[data-theme="light"] .tabs { border-top: 1px solid var(--line); padding: 6px 8px; gap: 4px; }
+:root[data-theme="light"] .tabs button { border: 0; border-radius: 8px; }
+:root[data-theme="light"] .tabs button.active { border: 0; background: var(--button-bg-active); }
+:root[data-theme="light"] .notes-composer { border-color: var(--line); }
+@media (min-width: 1000px) {
+  .app { max-width: 1200px; padding: 0 0 0 180px; }
+  .main { padding: 0 36px 28px; }
+  .sticky-head { top: 0; margin: 0 -36px 20px; padding: 12px 36px; }
+  .tabs { left: max(0px, calc((100vw - 1200px) / 2)); transform: none; width: 180px; height: 100dvh; top: 0; bottom: auto; display: flex; flex-direction: column; padding: 100px 14px 20px; gap: 8px; border: 0; border-right: 1px solid var(--line); }
+  .tabs button { text-align: left; padding: 12px 16px; border-right: 0; border-radius: 8px; }
+  :root[data-theme="light"] .tabs { border-top: 0; border-right: 1px solid var(--line); padding: 100px 14px 20px; }
+  .notes-composer { width: min(1020px, calc(100% - 180px)); left: calc(50% + 90px); bottom: 0; padding: 16px 36px; }
+  .app.notes-mode .main { padding-bottom: calc(var(--notes-composer-live-height) + 24px); }
+  .app.search-mode { padding-left: 0; }
+}
+@media (max-width: 420px) {
+  .main { padding-left: 14px; padding-right: 14px; }
+  .sticky-head { margin-left: -14px; margin-right: -14px; padding-left: 14px; padding-right: 14px; }
+}

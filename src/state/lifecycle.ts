@@ -34,7 +34,25 @@ export function filterOptions(key: FilterKey): StatusFilter[] {
   const type = (Object.keys(entityStores) as EntityType[]).find(
     (type) => entityStores[type] === key,
   )!;
-  return ["actionable", ...lifecycle[type], "discarded", "all"];
+  // A single-state default view needs no duplicate status entry.
+  const duplicate = type === "note" ? "inbox" : type === "goal" ? "active" : type === "routine" ? "enabled" : null;
+  return ["actionable", ...lifecycle[type].filter(status => status !== duplicate), "discarded", "all"];
+}
+
+export function statusLabel(status: ItemStatus): string {
+  const labels: Record<ItemStatus, string> = {
+    inbox: "Inbox", reference: "Saved", processed: "Archived",
+    open: "To do", doing: "In progress", done: "Completed",
+    planned: "Planned", active: "Active", paused: "Paused",
+    enabled: "On", achieved: "Achieved", discarded: "Trash",
+  };
+  return labels[status];
+}
+
+export function filterLabel(key: FilterKey, value: StatusFilter): string {
+  if (value === "all") return "All items";
+  if (value !== "actionable") return statusLabel(value);
+  return { notes: "Inbox", tasks: "Unfinished", projects: "Current", goals: "Active", routines: "On" }[key];
 }
 export function isOpen(item: Pick<BaseEntity, "status">): boolean {
   return ["inbox", "open", "doing", "planned", "active", "enabled"].includes(

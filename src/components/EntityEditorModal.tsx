@@ -11,6 +11,9 @@ import { Dialog } from "./Dialog";
 import { EntityActions } from "./EntityActions";
 import { useAction } from "./useAction";
 import { uid } from "../db";
+import { CopyNoteButton } from "./CopyNoteButton";
+import { ConversionContext, ConversionNotice } from "./ConversionNotice";
+import { EntityMetadata } from "./EntityMetadata";
 
 interface Props {
   mode: "create" | "edit";
@@ -28,6 +31,8 @@ interface Props {
     revision?: string,
   ): Promise<void>;
   onOpen(type: EntityType, id: string): void;
+  onConverted(type: Exclude<EntityType, "note">, id: string, noteId: string): void;
+  conversion?: ConversionContext;
   close(): void;
 }
 export function EntityEditorModal({
@@ -43,6 +48,8 @@ export function EntityEditorModal({
   onSaveRoutine,
   onSaveNote,
   onOpen,
+  onConverted,
+  conversion,
   close,
 }: Props) {
   const task = entity as Task | undefined;
@@ -149,8 +156,8 @@ export function EntityEditorModal({
   function triage(to: Exclude<EntityType, "note">) {
     if (note)
       void action.run(
-        () =>
-          app.triageNote(
+        async () => {
+          const id = await app.triageNote(
             {
               ...note,
               updatedAt: revision ?? note.updatedAt,
@@ -158,8 +165,9 @@ export function EntityEditorModal({
               description,
             },
             to,
-          ),
-        close,
+          );
+          onConverted(to, id, note.id);
+        },
       );
   }
   return (
@@ -168,12 +176,21 @@ export function EntityEditorModal({
       close={close}
       dirty={dirty}
       busy={action.pending || app.busy}
+      className="entity-editor"
+      footer={
+        <button type="submit" form="entity-editor-form" className="button-primary" disabled={!title.trim() || action.pending || app.busy}>
+          {action.pending ? "Saving…" : "Save"}
+        </button>
+      }
     >
+      <ConversionNotice context={conversion} beforeAction={guard} />
       <form
+        id="entity-editor-form"
         className="checklist editor-checklist"
         onSubmit={(event) => void save(event)}
       >
         <fieldset disabled={action.pending} className="editor-fields">
+          <fieldset className="editor-group editor-details">
           <label className="inline-select">
             <span className="field-label">Title</span>
             <input
@@ -201,7 +218,7 @@ export function EntityEditorModal({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={type === "project" ? 6 : 3}
+                rows={type === "project" ? 5 : 3}
               placeholder={
                 type === "project"
                   ? "[ ] First TODO\n[x] Completed TODO"
@@ -211,11 +228,11 @@ export function EntityEditorModal({
           </label>
           {type === "project" && (
             <p className="meta">
-              Each non-empty source line is a TODO, just as before. The short
-              description is stored separately; existing text is never
-              automatically split or discarded.
+               Each non-empty line is a TODO. Your short description is separate.
             </p>
           )}
+          </fieldset>
+          {(type === "task" || type === "project") && <fieldset className="editor-group editor-schedule"><legend>Schedule</legend>
           {(type === "task" || type === "project") && (
             <label className="inline-select">
               <span className="field-label">Deadline</span>
@@ -229,7 +246,7 @@ export function EntityEditorModal({
           {type === "task" && (
             <>
               <label className="inline-select">
-                <span className="field-label">Scheduled</span>
+                <span className="field-label">Plan for</span>
                 <input
                   type="date"
                   value={scheduledFor}
@@ -249,6 +266,8 @@ export function EntityEditorModal({
               </label>
             </>
           )}
+          </fieldset>}
+          {(type === "task" || type === "project" || type === "routine") && <fieldset className="editor-group editor-links"><legend>Links</legend>
           {(type === "task" || type === "project" || type === "routine") && (
             <label className="inline-select">
               <span className="field-label">Goal</span>
@@ -303,6 +322,7 @@ export function EntityEditorModal({
                 : ""}
             </p>
           )}
+          </fieldset>}
           {type === "goal" && (
             <div className="cards">
               {metrics.map((metric) => (
@@ -398,11 +418,6 @@ export function EntityEditorModal({
               </button>
             </div>
           )}
-          <div className="actions editor-save-row">
-            <button type="submit" disabled={!title.trim()}>
-              {action.pending ? "Saving…" : "Save"}
-            </button>
-          </div>
         </fieldset>
       </form>
       {action.error && (
@@ -484,8 +499,9 @@ export function EntityEditorModal({
       )}
       {mode === "edit" && entity && (
         <>
+          {type === "note" && <CopyNoteButton title={title} description={description} />}
           {type === "task" && (
-            <div className="actions">
+            <div className="actions task-editor-actions">
               <button
                 disabled={
                   action.pending ||
@@ -527,6 +543,7 @@ export function EntityEditorModal({
             app={app}
             beforeAction={guard}
           />
+          <EntityMetadata entity={entity} />
         </>
       )}
     </Dialog>

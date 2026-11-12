@@ -21,7 +21,7 @@ import { ProjectsTab } from "./features/ProjectsTab";
 import { SearchResultItem, SearchTab } from "./features/SearchTab";
 import { TasksTab } from "./features/TasksTab";
 import { TodayTab } from "./features/TodayTab";
-import { FilterKey, formatDateTime, useAppData } from "./state/useAppData";
+import { FilterKey, useAppData } from "./state/useAppData";
 import "./styles/layout.css";
 import "./styles/components.css";
 import "./styles/features.css";
@@ -104,6 +104,7 @@ function buildSearchResults(
 
 function App() {
   const [editor, setEditor] = useState<EditorTarget>(null);
+  const [conversionNoteId, setConversionNoteId] = useState<string | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -113,9 +114,15 @@ function App() {
     () => typeof window !== "undefined" && window.location.hash === "#/logs",
   );
   const app = useAppData();
+  function closeEditor() { setEditor(null); setConversionNoteId(null); }
+  const conversion = conversionNoteId ? {
+    back: () => { closeEditor(); app.setTab("notes"); app.selectFilter("notes", "actionable"); },
+    undo: async () => { await app.undoTriage(conversionNoteId); closeEditor(); app.setTab("notes"); app.selectFilter("notes", "actionable"); },
+  } : undefined;
   const searchInputRef = useRef<HTMLInputElement>(null);
   const logScrollRef = useRef<HTMLDivElement>(null);
   function openEntity(type: EntityType, id: string) {
+    setConversionNoteId(null);
     setEditor({
       mode: "edit",
       type,
@@ -152,7 +159,7 @@ function App() {
     selectedRoutine;
   useEffect(() => {
     if (editor?.mode === "edit" && app.loaded && !selectedEntity)
-      setEditor(null);
+      closeEditor();
   }, [selectedEntity, editor, app.loaded]);
   const searchResults = useMemo(
     () => buildSearchResults(app, debouncedSearchQuery),
@@ -557,7 +564,6 @@ function App() {
                   filteredNotes={app.filteredNotes}
                   showStatus={app.showStatus}
                   statusLabel={app.statusLabel}
-                  formatDateTime={formatDateTime}
                   ensureVisibleItemId={scrollTargetId}
                   onManage={(note) =>
                     setEditor({ mode: "edit", type: "note", id: note.id })
@@ -583,10 +589,10 @@ function App() {
                   logicalDay={app.logicalDay}
                   showStatus={app.showStatus}
                   statusLabel={app.statusLabel}
-                  formatDateTime={formatDateTime}
                   onManage={(task) =>
                     setEditor({ mode: "edit", type: "task", id: task.id })
                   }
+                  onComplete={app.completeTask}
                 />
               </section>
             )}
@@ -624,7 +630,6 @@ function App() {
                   app.toggleRoutineCompletionForDay
                 }
                 renderFilterControl={renderFilterControl}
-                formatDateTime={formatDateTime}
                 onManageRoutine={(routine) =>
                   setEditor({ mode: "edit", type: "routine", id: routine.id })
                 }
@@ -650,7 +655,6 @@ function App() {
                   logicalDay={app.logicalDay}
                   showStatus={app.showStatus}
                   statusLabel={app.statusLabel}
-                  formatDateTime={formatDateTime}
                   onManage={(project) => openEntity("project", project.id)}
                 />
               </section>
@@ -728,7 +732,8 @@ function App() {
           key={selectedProject.id}
           project={selectedProject}
           app={app}
-          close={() => setEditor(null)}
+          close={closeEditor}
+          conversion={conversion}
           edit={() => setEditor({ ...editor, detail: false })}
           openTask={(id) => openEntity("task", id)}
         />
@@ -738,7 +743,8 @@ function App() {
           key={selectedGoal.id}
           goal={selectedGoal}
           app={app}
-          close={() => setEditor(null)}
+          close={closeEditor}
+          conversion={conversion}
           edit={() => setEditor({ ...editor, detail: false })}
           open={openEntity}
         />
@@ -748,6 +754,8 @@ function App() {
           key={`${editor.mode}-${editor.type}-${editor.id ?? "new"}`}
           app={app}
           onOpen={openEntity}
+          conversion={conversion}
+          onConverted={(type, id, noteId) => { openEntity(type, id); setConversionNoteId(noteId); }}
           mode={editor.mode}
           type={editor.type}
           entity={
@@ -764,7 +772,7 @@ function App() {
           onSaveProject={handleSaveProject}
           onSaveGoal={handleSaveGoal}
           onSaveRoutine={handleSaveRoutine}
-          close={() => setEditor(null)}
+          close={closeEditor}
         />
       )}
 

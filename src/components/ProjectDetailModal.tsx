@@ -6,6 +6,8 @@ import { Project } from "../types";
 import { Dialog } from "./Dialog";
 import { EntityActions } from "./EntityActions";
 import { useAction } from "./useAction";
+import { ConversionContext, ConversionNotice } from "./ConversionNotice";
+import { EntityMetadata } from "./EntityMetadata";
 
 export function ProjectDetailModal({
   project,
@@ -13,12 +15,14 @@ export function ProjectDetailModal({
   edit,
   openTask,
   close,
+  conversion,
 }: {
   project: Project;
   app: AppData;
   edit(): void;
   openTask(id: string): void;
   close(): void;
+  conversion?: ConversionContext;
 }) {
   const [text, setText] = useState("");
   const [editing, setEditing] = useState<number | null>(null);
@@ -115,13 +119,14 @@ export function ProjectDetailModal({
       dirty={Boolean(text || editing !== null)}
       busy={action.pending || app.busy}
     >
+      <ConversionNotice context={conversion} beforeAction={guard} />
       <p className="entity-description">
         {project.summary ||
           "No short description yet. Add one in Edit project."}
       </p>
       <div className="actions">
         <span className="tags">
-          {project.status} · {todos.filter((todo) => !todo.checked).length}{" "}
+          {app.statusLabel(project)} · {todos.filter((todo) => !todo.checked).length}{" "}
           TODOs left
         </span>
         <button
@@ -173,7 +178,7 @@ export function ProjectDetailModal({
               if (guard()) openTask(task.id);
             }}
           >
-            {task.title} · {task.status}
+            {task.title} · {app.statusLabel(task)}
           </button>
         ))}
       </div>
@@ -183,6 +188,7 @@ export function ProjectDetailModal({
         app={app}
         beforeAction={guard}
       />
+      <EntityMetadata entity={project} />
     </Dialog>
   );
 }

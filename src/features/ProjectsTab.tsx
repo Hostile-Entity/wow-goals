@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { AppData, formatDueLabel, getStatusBucket } from "../state/useAppData";
 import { projectTodos } from "../state/projectTodos";
 import { Project } from "../types";
+import { ItemTimestamp } from "../components/ItemTimestamp";
 
 interface Props {
   filteredProjects: AppData["filteredProjects"];
@@ -10,7 +11,6 @@ interface Props {
   showStatus: boolean;
   statusLabel: AppData["statusLabel"];
   onManage(project: Project): void;
-  formatDateTime(iso: string): string;
 }
 export function ProjectsTab({
   filteredProjects,
@@ -19,7 +19,6 @@ export function ProjectsTab({
   showStatus,
   statusLabel,
   onManage,
-  formatDateTime,
 }: Props) {
   const goalById = useMemo(
     () => new Map(goals.map((goal) => [goal.id, goal.title])),
@@ -71,19 +70,13 @@ export function ProjectsTab({
                   </div>
                 )}
                 <div className="tags entity-summary entity-footer-meta">
-                  {project.deadline
-                    ? `${formatDueLabel(project.deadline, logicalDay)} | `
-                    : ""}
-                  {project.goalId
-                    ? `goal ${goalById.get(project.goalId) ?? "Unknown"}`
-                    : "No goal linked"}
+                  {[
+                    project.deadline && formatDueLabel(project.deadline, logicalDay),
+                    project.goalId && (goalById.get(project.goalId) ?? "Unknown goal"),
+                  ].filter(Boolean).join(" · ")}
                 </div>
               </div>
-              <div className="meta-row entity-meta-time">
-                {project.createdAt === project.updatedAt
-                  ? `Created ${formatDateTime(project.createdAt)}`
-                  : `Updated ${formatDateTime(project.updatedAt)}`}
-              </div>
+              <ItemTimestamp entity={project} />
             </div>
           </article>
         );

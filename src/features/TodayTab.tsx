@@ -27,8 +27,8 @@ export function TodayTab({
           <div className="meta-row">
             {task.deadline
               ? formatDueLabel(task.deadline, app.logicalDay)
-              : "No deadline"}
-            {task.scheduledFor ? ` · scheduled ${task.scheduledFor}` : ""}
+              : ""}
+            {task.scheduledFor ? ` · planned for ${task.scheduledFor}` : ""}
             {project && ["paused", "done", "discarded"].includes(project.status)
               ? ` · project ${project.status}`
               : ""}
@@ -56,25 +56,13 @@ export function TodayTab({
   }
   return (
     <section className="today-tab">
-      <h2>Today</h2>
-      <div className="stats">
-        <div className="stat">
-          <span className="stat-value">{app.completedTodayCount}</span>
-          <span className="stat-label">tasks done</span>
-        </div>
-        <div className="stat">
-          <span className="stat-value">{app.routinesTodayCount}</span>
-          <span className="stat-label">routines done</span>
-        </div>
-        <div className="stat">
-          <span className="stat-value">{app.activeNoteCount}</span>
-          <span className="stat-label">notes untriaged</span>
-        </div>
-      </div>
+      <header className="today-header">
+        <h2>Today</h2>
+        <p className="meta">{app.completedTodayCount} tasks done · {app.routinesTodayCount} routines done · {app.activeNoteCount} notes in inbox</p>
+      </header>
       <h3>Focus 3</h3>
       <p className="meta">
-        Pin up to three tasks. Urgent work is shown separately, even if snoozed
-        or its project is paused.
+        Choose up to three priorities for today.
       </p>
       <div className="today-top3-list">
         {app.todayTop3.map((task) => (
@@ -139,7 +127,8 @@ export function TodayTab({
             ))}
         </div>
       )}
-      <h3>Overdue / due today</h3>
+      <h3>Other due tasks</h3>
+      <p className="meta">Due and overdue work stays visible, even when planned for later or its project is paused.</p>
       <div className="today-top3-list">
         {app.urgentTasks.map(row)}
         {!app.urgentTasks.length && (

@@ -1,9 +1,5 @@
 import { FilterKey, StatusFilter } from "../state/useAppData";
-import { filterOptions } from "../state/lifecycle";
-
-function optionLabel(value: StatusFilter): string {
-  return value === "actionable" ? "open items" : value;
-}
+import { filterLabel, filterOptions } from "../state/lifecycle";
 
 interface FilterControlProps {
   filterKey: FilterKey;
@@ -28,7 +24,7 @@ export function FilterControl({
         aria-expanded={isOpen}
         aria-controls={`filters-${filterKey}`}
       >
-        Filter: {optionLabel(current)}
+        View: {filterLabel(filterKey, current)}
       </button>
       {isOpen && (
         <div className="filter-menu" id={`filters-${filterKey}`}>
@@ -40,7 +36,7 @@ export function FilterControl({
                 onSelect(option);
               }}
             >
-              {optionLabel(option)}
+              {filterLabel(filterKey, option)}
             </button>
           ))}
         </div>

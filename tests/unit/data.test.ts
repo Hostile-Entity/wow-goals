@@ -10,7 +10,7 @@ import {
   Records,
 } from "../../src/db";
 import { backupPayload, parseBackup } from "../../src/db/backup";
-import { emptyData, migrateV1 } from "../../src/db/schema";
+import { DB_VERSION, emptyData, migrateV1 } from "../../src/db/schema";
 import {
   applyChanges,
   completeTaskCommand,
@@ -18,8 +18,9 @@ import {
   triageCommand,
   undoTriageCommand,
   updateCommand,
+  undoTaskCompletionCommand,
 } from "../../src/state/commands";
-import { filterOptions, sortTasks } from "../../src/state/lifecycle";
+import { filterLabel, filterOptions, sortTasks, statusLabel } from "../../src/state/lifecycle";
 import { changeTodo, projectTodos } from "../../src/state/projectTodos";
 import { projectProgressByDay } from "../../src/state/history";
 import { AppStateData } from "../../src/types";
@@ -52,6 +53,28 @@ async function seedLegacy(name: string, keyless = false, version = 1) {
   });
 }
 const name = () => `test-${crypto.randomUUID()}`;
+async function seedV2(dbName: string, version = 2, density?: string) {
+  const data = migrated();
+  const settings = { ...data.settings } as Partial<AppStateData["settings"]>;
+  delete settings.listDensity;
+  if (density) Object.assign(settings, { listDensity: density });
+  const old = { ...data, settings } as AppStateData;
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open(dbName, version);
+    request.onupgradeneeded = () => {
+      for (const [key, values] of Object.entries(old)) {
+        const store = request.result.createObjectStore(key, { keyPath: "id" });
+        for (const row of Array.isArray(values) ? values : [values]) store.put(row);
+      }
+      const meta = request.result.createObjectStore("meta", { keyPath: "id" });
+      meta.put({ id: "pre-existing", data: "keep" });
+      meta.put({ id: "pre-v3", data: "older snapshot" });
+    };
+    request.onsuccess = () => { request.result.close(); resolve(); };
+    request.onerror = () => reject(request.error);
+  });
+  return old;
+}
 function canonical<T>(data: T): T {
   const copy = structuredClone(data) as any;
   for (const value of Object.values(copy))
@@ -60,6 +83,57 @@ function canonical<T>(data: T): T {
 }
 
 describe("one-time database transition", () => {
+  it.each([2, 6])("upgrades existing v2 records at physical version %s without reinterpreting any data", async version => {
+    const dbName = name();
+    const old = await seedV2(dbName, version);
+    const db = await openDatabase(dbName);
+    const next = await readSnapshot(db);
+    expect(canonical(next)).toEqual(canonical({ ...old, settings: { ...old.settings, listDensity: "comfortable" } }));
+    const meta = await new Promise<any[]>(resolve => {
+      const read = db.transaction("meta").objectStore("meta").getAll();
+      read.onsuccess = () => resolve(read.result);
+    });
+    expect(meta.find(m => m.id === "pre-existing")?.data).toBe("keep");
+    expect(meta.find(m => m.id === "pre-v3")?.data).toBe("older snapshot");
+    expect(canonical(meta.find(m => m.id === "pre-v4").data.data)).toEqual(canonical(old));
+    expect(meta.some(m => m.id === "migration")).toBe(false);
+    await mutateDatabase(db, ["settings"], records => [{ store: "settings", row: { ...records.settings[0], showStatus: !old.settings.showStatus } }]);
+    db.close();
+    const reopened = await openDatabase(dbName);
+    expect((await readSnapshot(reopened)).settings.showStatus).toBe(!old.settings.showStatus);
+    reopened.close();
+  });
+  it("rolls back the v2 upgrade and safety snapshot on a settings write failure", async () => {
+    const dbName = name();
+    const before = await seedV2(dbName);
+    const original = IDBObjectStore.prototype.put;
+    const spy = vi.spyOn(IDBObjectStore.prototype, "put").mockImplementation(function(this: IDBObjectStore, ...args: Parameters<IDBObjectStore["put"]>) {
+      if (this.name === "settings") throw new Error("density migration failed");
+      return original.apply(this, args);
+    });
+    await expect(openDatabase(dbName)).rejects.toThrow("density migration failed");
+    spy.mockRestore();
+    const old = await new Promise<IDBDatabase>(resolve => { const r = indexedDB.open(dbName); r.onsuccess = () => resolve(r.result); });
+    expect(old.version).toBe(2);
+    expect(canonical(await readSnapshot(old))).toEqual(canonical(before));
+    const saved = await new Promise<any>(resolve => { const r = old.transaction("meta").objectStore("meta").get("pre-v4"); r.onsuccess = () => resolve(r.result); });
+    expect(saved).toBeUndefined();
+    old.close();
+    const retry = await openDatabase(dbName);
+    expect((await readSnapshot(retry)).settings.listDensity).toBe("comfortable");
+    retry.close();
+  });
+  it("upgrades a v3 compact preference to comfortable without changing user records", async () => {
+    const dbName = name();
+    const before = await seedV2(dbName, 3, "compact");
+    const db = await openDatabase(dbName);
+    expect(canonical(await readSnapshot(db))).toEqual(canonical({ ...before, settings: { ...before.settings, listDensity: "comfortable" } }));
+    db.close();
+    const reopened = await openDatabase(dbName);
+    expect(reopened.version).toBe(DB_VERSION);
+    expect((await readSnapshot(reopened)).settings.listDensity).toBe("comfortable");
+    reopened.close();
+  });
   it.each([false, true])(
     "preserves IDs, text, relationships, timestamps and history (keyless=%s)",
     async (keyless) => {
@@ -67,7 +141,7 @@ describe("one-time database transition", () => {
       await seedLegacy(dbName, keyless);
       const db = await openDatabase(dbName);
       const data = await readSnapshot(db);
-      expect(db.version).toBe(2);
+      expect(db.version).toBe(DB_VERSION);
       const legacy = legacyFixture();
       expect(data.projects.find((p) => p.id === "project-a")?.description).toBe(
         legacy.projects[0].description,
@@ -116,7 +190,7 @@ describe("one-time database transition", () => {
       const dbName = name();
       await seedLegacy(dbName, false, version);
       let db = await openDatabase(dbName);
-      expect(db.version).toBe(version + 1);
+      expect(db.version).toBe(Math.max(DB_VERSION, version + 1));
       const data = await readSnapshot(db);
       expect(data.notes[0].status).toBe("inbox");
       expect(data.projects.find((p) => p.id === "project-paused")?.status).toBe(
@@ -158,6 +232,21 @@ describe("one-time database transition", () => {
 });
 
 describe("backup safety", () => {
+  it("accepts an existing v2 backup, adding only the density default", () => {
+    const data = migrated();
+    const old = structuredClone(data) as any;
+    delete old.settings.listDensity;
+    expect(parseBackup({ app: "wow-goals", schemaVersion: 2, data: old })).toEqual(data);
+    expect(old.settings).not.toHaveProperty("listDensity");
+    expect(parseBackup(backupPayload(data))).toEqual(data);
+    const compact = structuredClone(data);
+    Object.assign(compact.settings, { listDensity: "compact" });
+    expect(parseBackup({ app: "wow-goals", schemaVersion: 3, data: compact })).toEqual(data);
+    expect(() => parseBackup({ app: "wow-goals", schemaVersion: DB_VERSION, data: compact })).toThrow("density");
+    const invalid = backupPayload(data) as any;
+    invalid.data.settings.listDensity = "invalid";
+    expect(() => parseBackup(invalid)).toThrow("density");
+  });
   it("round trips every new field, completion date and all logs", () => {
     const data = migrated();
     expect(parseBackup(backupPayload(data))).toEqual(data);
@@ -236,6 +325,29 @@ describe("backup safety", () => {
 });
 
 describe("selected core flows", () => {
+  it("uses friendly labels without collapsing progress states or duplicate default filters", () => {
+    expect(filterOptions("notes")).not.toContain("inbox");
+    expect(filterOptions("goals")).not.toContain("active");
+    expect(filterOptions("tasks")).toContain("doing");
+    expect(filterOptions("projects")).toContain("planned");
+    expect(filterLabel("notes", "actionable")).toBe("Inbox");
+    expect(filterLabel("tasks", "actionable")).toBe("Unfinished");
+    expect(statusLabel("reference")).toBe("Saved");
+    expect(statusLabel("enabled")).toBe("On");
+  });
+  it("completion Undo restores in-progress status and removes only its own history entry", () => {
+    const before = migrated();
+    const task = before.tasks.find(t => t.status === "doing")!;
+    const completed = applyChanges(before, completeTaskCommand(recordSet(before), task.id, "2026-11-12"));
+    const completion = completed.completions.find(c => c.entityId === task.id && c.date === "2026-11-12")!;
+    const revision = completed.tasks.find(t => t.id === task.id)!.updatedAt;
+    const changes = undoTaskCompletionCommand(recordSet(completed), task.id, revision, completion.id, "doing", "2026-11-12");
+    const undone = applyChanges(completed, changes);
+    expect(undone.tasks.find(t => t.id === task.id)?.status).toBe("doing");
+    expect(undone.completions).toEqual(before.completions);
+    completed.tasks.find(t => t.id === task.id)!.updatedAt = "2099-01-01T00:00:00Z";
+    expect(() => undoTaskCompletionCommand(recordSet(completed), task.id, revision, completion.id, "doing", "2026-11-12")).toThrow("kept safe");
+  });
   it("keeps original blank lines and prose TODOs intact until edited", () => {
     const source = legacyFixture().projects[0].description;
     const rows = projectTodos(source);

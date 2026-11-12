@@ -1,10 +1,13 @@
 import { test, expect, Page } from "@playwright/test";
 import { legacyFixture } from "../fixtures/legacy";
+import { migrateV1 } from "../../src/db/schema";
+import { AppStateData } from "../../src/types";
 
 const tab = (page: Page, name: string) =>
   page.getByRole("navigation").getByRole("button", { name, exact: true });
 function canonical<T>(data: T): T {
   const copy = structuredClone(data) as any;
+  if (Array.isArray(copy)) copy.sort((a, b) => a.id.localeCompare(b.id));
   for (const value of Object.values(copy))
     if (Array.isArray(value)) value.sort((a, b) => a.id.localeCompare(b.id));
   return copy;
@@ -87,7 +90,7 @@ test("real v1 transition, compact projects, checklist edits, complete and reopen
   await dialog
     .getByRole("checkbox", { name: "Write introduction", exact: true })
     .click();
-  await expect(dialog.getByText("active · 1 TODOs left")).toBeVisible();
+  await expect(dialog.getByText("Active · 1 TODOs left")).toBeVisible();
   await dialog
     .getByRole("textbox", { name: "New TODO", exact: true })
     .fill("Publish the website");
@@ -115,14 +118,14 @@ test("real v1 transition, compact projects, checklist edits, complete and reopen
   await dialog
     .getByRole("button", { name: "Complete project", exact: true })
     .click();
-  await expect(dialog.getByText("done · 2 TODOs left")).toBeVisible();
+  await expect(dialog.getByText("Completed · 2 TODOs left")).toBeVisible();
   expect(
     (await records(page, "tasks")).find((t) => t.id === "task-a").status,
   ).toBe("open");
   await dialog
-    .getByRole("button", { name: "Reopen as active", exact: true })
+    .getByRole("button", { name: "Reopen as Active", exact: true })
     .click();
-  await expect(dialog.getByText("active · 2 TODOs left")).toBeVisible();
+  await expect(dialog.getByText("Active · 2 TODOs left")).toBeVisible();
   const changed = (await records(page, "projects")).find(
     (p) => p.id === "project-a",
   );
@@ -133,7 +136,7 @@ test("real v1 transition, compact projects, checklist edits, complete and reopen
   expect(errors).toEqual([]);
 });
 
-test("selection copy, current-draft conversion, provenance and safe undo", async ({
+test("direct edit, copy fallback, current-draft conversion and safe undo", async ({
   page,
   context,
 }) => {
@@ -141,10 +144,12 @@ test("selection copy, current-draft conversion, provenance and safe undo", async
   await seed(page);
   await tab(page, "Notes").click();
   const card = page.locator("#item-note-note-a");
-  await card.getByRole("button", { name: "Select note Saved message" }).click();
-  await card.getByRole("button", { name: "Copy", exact: true }).click();
+  await expect(card.getByRole("button", { name: /Select/ })).toHaveCount(0);
+  await card.getByRole("button", { name: "Edit", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit note", exact: true });
+  await dialog.getByRole("button", { name: "Copy text", exact: true }).click();
   await expect(
-    page.getByRole("status").filter({ hasText: "Copied Saved message" }),
+    dialog.getByRole("status").filter({ hasText: "Note copied." }),
   ).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     "Saved message\nLine one\nLine two\n🙂",
@@ -156,14 +161,10 @@ test("selection copy, current-draft conversion, provenance and safe undo", async
       configurable: true,
     }),
   );
-  await card.getByRole("button", { name: "Copy", exact: true }).click();
-  const fallback = page.getByRole("dialog", { name: "Copy note", exact: true });
+  await dialog.getByRole("button", { name: "Copy text", exact: true }).click();
   await expect(
-    fallback.getByRole("textbox", { name: "Message to copy" }),
+    dialog.getByRole("textbox", { name: "Message to copy" }),
   ).toHaveValue("Saved message\nLine one\nLine two\n🙂");
-  await fallback.getByRole("button", { name: "Close", exact: true }).click();
-  await card.getByRole("button", { name: "Manage" }).click();
-  let dialog = page.getByRole("dialog", { name: "Edit note", exact: true });
   await dialog
     .getByRole("textbox", { name: "Title", exact: true })
     .fill("Edited message");
@@ -184,18 +185,7 @@ test("selection copy, current-draft conversion, provenance and safe undo", async
     description: "Fresh description\nSecond line",
     priority: 2,
   });
-  await page
-    .getByRole("button", { name: "Filter: open items", exact: true })
-    .click();
-  await page.getByRole("button", { name: "processed", exact: true }).click();
-  await card
-    .getByRole("button", { name: "Select note Edited message" })
-    .click();
-  await card.getByRole("button", { name: "Manage" }).click();
-  dialog = page.getByRole("dialog", { name: "Edit note", exact: true });
-  await dialog
-    .getByRole("button", { name: "Open result", exact: true })
-    .click();
+  await expect(page.getByRole("button", { name: "Back to Inbox", exact: true })).toBeVisible();
   await expect(
     page
       .getByRole("dialog", { name: "Edit task", exact: true })
@@ -203,13 +193,9 @@ test("selection copy, current-draft conversion, provenance and safe undo", async
   ).toHaveValue("Edited message");
   await page
     .getByRole("dialog")
-    .getByRole("button", { name: "Close", exact: true })
-    .click();
-  await card.getByRole("button", { name: "Manage" }).click();
-  await page
-    .getByRole("dialog")
     .getByRole("button", { name: "Undo conversion", exact: true })
     .click();
+  await expect(card).toBeVisible();
   expect(
     (await records(page, "tasks")).some((t) => t.id === converted.triagedId),
   ).toBe(false);
@@ -263,7 +249,7 @@ test("goal primary update, chart history and achievement preserve linked work", 
   const card = page.locator("#item-goal-goal-a");
   await expect(card.getByText(/Published pages:/)).toBeVisible();
   await expect(card.getByText(/Contacts:/)).toHaveCount(0);
-  await card.getByRole("button", { name: "Update", exact: true }).click();
+  await card.getByRole("button", { name: "Open", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "goal-a", exact: true });
   await dialog
     .getByRole("spinbutton", { name: "Primary metric value" })
@@ -289,7 +275,7 @@ test("goal primary update, chart history and achievement preserve linked work", 
     .getByRole("button", { name: "Achieve goal", exact: true })
     .click();
   await expect(
-    dialog.getByRole("button", { name: "Reopen as active", exact: true }),
+    dialog.getByRole("button", { name: "Reopen as Active", exact: true }),
   ).toBeVisible();
   expect(
     (await records(page, "tasks")).find((t) => t.id === "task-a").status,
@@ -302,13 +288,13 @@ test("remembered filters, search reveal and dirty dialog keyboard protection", a
   await seed(page);
   await tab(page, "Tasks").click();
   await page
-    .getByRole("button", { name: "Filter: open items", exact: true })
+    .getByRole("button", { name: "View: Unfinished", exact: true })
     .click();
-  await page.getByRole("button", { name: "done", exact: true }).click();
+  await page.getByRole("button", { name: "Completed", exact: true }).click();
   await page.reload();
   await tab(page, "Tasks").click();
   await expect(
-    page.getByRole("button", { name: "Filter: done", exact: true }),
+    page.getByRole("button", { name: "View: Completed", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Search all items" }).click();
   await page
@@ -323,7 +309,7 @@ test("remembered filters, search reveal and dirty dialog keyboard protection", a
   ).toBe("done");
   await page
     .locator("#item-task-task-a")
-    .getByRole("button", { name: "Manage", exact: true })
+    .getByRole("button", { name: "Edit", exact: true })
     .click();
   const dialog = page.getByRole("dialog", { name: "Edit task", exact: true });
   await dialog
@@ -487,10 +473,7 @@ test("storage write failure keeps the draft and original data for a successful r
   await seed(page);
   await tab(page, "Notes").click();
   const card = page.locator("#item-note-note-a");
-  await card
-    .getByRole("button", { name: "Select note Saved message", exact: true })
-    .click();
-  await card.getByRole("button", { name: "Manage", exact: true }).click();
+  await card.getByRole("button", { name: "Edit", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Edit note", exact: true });
   await dialog
     .getByRole("textbox", { name: "Title", exact: true })
@@ -527,7 +510,7 @@ test("stale editor refuses to overwrite a changed record", async ({ page }) => {
   await tab(page, "Tasks").click();
   await page
     .locator("#item-task-task-a")
-    .getByRole("button", { name: "Manage", exact: true })
+    .getByRole("button", { name: "Edit", exact: true })
     .click();
   const dialog = page.getByRole("dialog", { name: "Edit task", exact: true });
   await dialog
@@ -592,7 +575,7 @@ test("fresh create flows, task completion, daily routine, review and full reset"
   await page
     .locator(".entity-card")
     .filter({ hasText: "Fresh task" })
-    .getByRole("button", { name: "Manage", exact: true })
+    .getByRole("button", { name: "Edit", exact: true })
     .click();
   await page
     .getByRole("dialog")
@@ -717,4 +700,183 @@ test("a real failed upgrade preserves v1 data and can retry without a reset", as
   ).toBeVisible();
   expect(await records(page, "tasks")).toHaveLength(4);
   expect((await records(page, "notes"))[0].status).toBe("inbox");
+});
+
+for (const version of [2, 3]) {
+test(`v${version} upgrade preserves every record, uses only comfortable cards and supports completion Undo`, async ({ page }) => {
+  const data = migrateV1(legacyFixture() as unknown as AppStateData);
+  data.notes[0].status = "reference";
+  data.settings.focusTaskIds = ["task-b"];
+  delete (data.settings as Partial<AppStateData["settings"]>).listDensity;
+  if (version === 3) Object.assign(data.settings, { listDensity: "compact" });
+  await page.goto("icons/icon.svg");
+  await page.evaluate(async ({ data, version }) => {
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open("wow-goals-db", version);
+      request.onupgradeneeded = () => {
+        for (const [key, value] of Object.entries(data)) {
+          const store = request.result.createObjectStore(key, { keyPath: "id" });
+          for (const row of Array.isArray(value) ? value : [value]) store.put(row);
+        }
+        request.result.createObjectStore("meta", { keyPath: "id" }).put({ id: "existing-safety", data: "keep" });
+      };
+      request.onsuccess = () => { request.result.close(); resolve(); };
+      request.onerror = () => reject(request.error);
+    });
+  }, { data, version });
+  await page.goto("./");
+  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  for (const [store, before] of Object.entries(data)) {
+    const after = await records(page, store);
+    if (store === "settings") expect(after[0]).toEqual({ ...before, listDensity: "comfortable" });
+    else expect(canonical(after)).toEqual(canonical(before));
+  }
+  const meta = await records(page, "meta");
+  expect(canonical(meta.find(row => row.id === "pre-v4").data.data)).toEqual(canonical(data));
+  expect(meta.find(row => row.id === "existing-safety").data).toBe("keep");
+  await tab(page, "Tasks").click();
+  await expect(page.getByRole("group", { name: "List density", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Compact|Comfortable/ })).toHaveCount(0);
+  await page.reload();
+  await tab(page, "Tasks").click();
+  const card = page.locator("#item-task-task-b");
+  await expect(card).not.toContainText("postponed");
+  await expect(card.locator(".item-timestamp")).toContainText("Created");
+  await card.getByRole("button", { name: "Complete task-b", exact: true }).click();
+  await expect(card).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(card).toBeVisible();
+  expect((await records(page, "tasks")).find(t => t.id === "task-b").status).toBe("doing");
+  expect(await records(page, "completions")).toEqual(data.completions);
+  await tab(page, "Notes").click();
+  await page.getByRole("button", { name: "View: Inbox", exact: true }).click();
+  await expect(page.locator(".filter-menu").getByRole("button", { name: "Inbox", exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "Saved", exact: true }).click();
+  await expect(page.locator("#item-note-note-a")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+}
+
+test("focused urgent tasks appear only once, with due and paused-project exceptions visible", async ({ page }) => {
+  await seed(page);
+  await page.getByRole("combobox", { name: "Choose focus task" }).selectOption("task-a");
+  await page.getByRole("button", { name: "Pin", exact: true }).click();
+  const urgent = page.locator(".today-task-card").filter({ hasText: "Overdue task" });
+  await expect(urgent).toHaveCount(1);
+  await expect(urgent.getByText(/Overdue by/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Unpin focus", exact: true })).toBeVisible();
+  await urgent.getByRole("button", { name: "Later", exact: true }).click();
+  await page.getByRole("button", { name: "Next week", exact: true }).click();
+  await expect(urgent).toHaveCount(1);
+  await expect(urgent).toBeVisible();
+  await expect(page.getByRole("button", { name: "Unpin focus", exact: true })).toHaveCount(0);
+  await tab(page, "Projects").click();
+  await page.locator("#item-project-project-a").getByRole("button", { name: "Open", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Mark Paused", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
+  await tab(page, "Today").click();
+  await expect(urgent).toHaveCount(1);
+  await expect(urgent).toContainText("project paused");
+});
+
+test("project conversion opens its result, Back to Inbox works, delete is directly accessible", async ({ page }) => {
+  await seed(page);
+  await tab(page, "Notes").click();
+  await page.locator("#item-note-note-a").getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Project", exact: true }).click();
+  const result = page.getByRole("dialog", { name: "Saved message", exact: true });
+  await expect(result.getByRole("button", { name: "Back to Inbox", exact: true })).toBeVisible();
+  await expect(result.getByText("Danger zone", { exact: true })).toHaveCount(0);
+  await expect(result.getByRole("button", { name: "Delete", exact: true })).toBeVisible();
+  await result.getByRole("button", { name: "Back to Inbox", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Capture & Triage", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "View: Inbox", exact: true }).click();
+  await page.getByRole("button", { name: "Archived", exact: true }).click();
+  await expect(page.locator("#item-note-note-a")).toBeVisible();
+});
+
+test("all collection cards show a bottom-right timestamp, including updated notes", async ({ page }) => {
+  await seed(page);
+  for (const [name, selector] of [["Notes", "#item-note-note-a"], ["Tasks", "#item-task-task-a"], ["Projects", "#item-project-project-a"]]) {
+    await tab(page, name).click();
+    const timestamp = page.locator(selector).locator(".card-footer .item-timestamp");
+    await expect(timestamp).toBeVisible();
+    await expect(timestamp).toContainText("Created");
+    expect(await timestamp.evaluate(el => getComputedStyle(el).textAlign)).toBe("right");
+  }
+  await tab(page, "More").click();
+  for (const [name, selector] of [["Goals", "#item-goal-goal-a"], ["Routines", "#item-routine-routine-a"]]) {
+    await page.getByRole("button", { name, exact: true }).click();
+    await expect(page.locator(selector).locator(".card-footer .item-timestamp")).toBeVisible();
+  }
+  await tab(page, "Notes").click();
+  const card = page.locator("#item-note-note-a");
+  await card.getByRole("button", { name: "Edit", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Title", exact: true }).fill("Updated phone note");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(card.locator(".item-timestamp")).toContainText("Updated");
+  await expect(card.locator("time")).toHaveAttribute("datetime", (await records(page, "notes")).find(n => n.id === "note-a").updatedAt);
+});
+
+test("phone editor keeps stacked fields, a separate reachable Save bar, and no horizontal overflow", async ({ page }) => {
+  await seed(page);
+  await tab(page, "Tasks").click();
+  await page.getByRole("button", { name: "+ Task", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Create task", exact: true });
+  for (const size of [{ width: 390, height: 780 }, { width: 320, height: 640 }, { width: 360, height: 420 }]) {
+    await page.setViewportSize(size);
+    await expect(editor).toBeVisible();
+    await expect.poll(async () => editor.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(size.height);
+    const metrics = await editor.evaluate(el => {
+      const body = el.querySelector(".modal-body") as HTMLElement;
+      const header = el.querySelector(".card-top")!.getBoundingClientRect();
+      const footer = el.querySelector(".modal-footer")!.getBoundingClientRect();
+      const content = body.getBoundingClientRect();
+      const label = el.querySelector(".field-label")!.getBoundingClientRect();
+      const input = el.querySelector("input")!.getBoundingClientRect();
+      return { overflow: body.scrollWidth > body.clientWidth, stacked: label.bottom <= input.top,
+        unobscured: content.top >= header.bottom && content.bottom <= footer.top,
+        inputFont: parseFloat(getComputedStyle(el.querySelector("input")!).fontSize) };
+    });
+    expect(metrics).toEqual({ overflow: false, stacked: true, unobscured: true, inputFont: 16 });
+    await editor.getByRole("combobox", { name: "Project", exact: true }).selectOption("project-a");
+    const save = editor.getByRole("button", { name: "Save", exact: true });
+    await expect(save).toBeInViewport();
+    const footer = editor.locator(".modal-footer");
+    expect((await footer.boundingBox())!.y + (await footer.boundingBox())!.height).toBeLessThanOrEqual(size.height + 1);
+  }
+  await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Created from small phone");
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  expect((await records(page, "tasks")).find(t => t.title === "Created from small phone").projectId).toBe("project-a");
+});
+
+test("visible Discard and Delete require confirmation and cancellation preserves the item", async ({ page }) => {
+  await seed(page);
+  await tab(page, "Notes").click();
+  await page.locator("#item-note-note-a").getByRole("button", { name: "Edit", exact: true }).click();
+  const editor = page.getByRole("dialog");
+  await expect(editor.getByText("Danger zone", { exact: true })).toHaveCount(0);
+  for (const name of ["Discard", "Delete"]) {
+    page.once("dialog", dialog => dialog.dismiss());
+    await editor.getByRole("button", { name, exact: true }).click();
+    expect((await records(page, "notes")).find(n => n.id === "note-a").status).toBe("inbox");
+  }
+  page.once("dialog", dialog => dialog.accept());
+  await editor.getByRole("button", { name: "Discard", exact: true }).click();
+  await expect.poll(async () => (await records(page, "notes")).find(n => n.id === "note-a").status).toBe("discarded");
+  await editor.getByRole("button", { name: "Recover", exact: true }).click();
+  await expect.poll(async () => (await records(page, "notes")).find(n => n.id === "note-a").status).toBe("inbox");
+});
+
+test("tab headers sit directly below the top bar without a blank spacer", async ({ page }) => {
+  await seed(page);
+  for (const [name, selector] of [["Notes", ".section-head"], ["Tasks", ".section-head"], ["Projects", ".section-head"], ["More", ".more-tabs"]]) {
+    await tab(page, name).click();
+    const topBar = await page.locator(".topbar").boundingBox();
+    const tabBar = await page.locator(selector).boundingBox();
+    expect(Math.abs(tabBar!.y - (topBar!.y + topBar!.height))).toBeLessThanOrEqual(1);
+  }
 });

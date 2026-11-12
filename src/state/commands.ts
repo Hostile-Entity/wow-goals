@@ -134,6 +134,26 @@ export function completeTaskCommand(
     event("complete", "task", id, { occurredDay: day, title: task.title }),
   ];
 }
+
+/** Undo only this completion, never a subsequent edit or older history. */
+export function undoTaskCompletionCommand(
+  records: Records,
+  id: string,
+  revision: string,
+  completionId: string,
+  previousStatus: ItemStatus,
+  day: string,
+): Change[] {
+  const task = findEntity(records, "task", id);
+  if (task.status !== "done" || task.updatedAt !== revision ||
+      !records.completions.some(c => c.id === completionId && c.entityId === id))
+    throw new Error("This task has since changed. Its current state was kept safe.");
+  return [
+    ...updateCommand(records, "task", id, row => ({ ...row, status: previousStatus }), day),
+    { store: "completions", deleteId: completionId },
+    event("undo-complete", "task", id, { occurredDay: day }),
+  ];
+}
 export function triageCommand(
   records: Records,
   draft: Note,

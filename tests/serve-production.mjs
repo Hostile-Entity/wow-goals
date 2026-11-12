@@ -42,7 +42,7 @@ createServer(async (request, response) => {
       bytes = Buffer.from(
         bytes
           .toString()
-          .replace("wow-goals-v31", `wow-goals-v${workerVersion}`),
+           .replace(/wow-goals-v\d+/, `wow-goals-v${workerVersion}`),
       );
     response.setHeader(
       "Content-Type",

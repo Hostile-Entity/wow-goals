@@ -1,20 +1,20 @@
 :root {
-  --wow-bg: #eef2f7;
-  --wow-bg-mid: #f4f7fb;
+  --wow-bg: #f5f7f6;
+  --wow-bg-mid: #f5f7f6;
   --wow-bg-top: #ffffff;
   --wow-panel: #ffffff;
-  --wow-panel-inner: #f8fafc;
-  --wow-border: #cfd7e3;
-  --wow-border-soft: #dde4ee;
+  --wow-panel-inner: #f6f8f7;
+  --wow-border: #ccd8d1;
+  --wow-border-soft: #e0e7e3;
   --wow-border-blue: #8aa4c2;
-  --wow-gold: #1f4f8a;
-  --wow-gold-soft: #2f629e;
-  --wow-text: #142033;
-  --wow-text-muted: #5a6b84;
+  --wow-gold: #315f4c;
+  --wow-gold-soft: #47715d;
+  --wow-text: #20332a;
+  --wow-text-muted: #586b60;
   --wow-red: #c13232;
   --wow-green: #1f7a3c;
   --wow-shadow-strong: 0 4px 16px rgba(15, 28, 48, 0.08);
-  --wow-font: "Trebuchet MS", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  --wow-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   --bg: var(--wow-bg);
   --panel: var(--wow-panel);
@@ -26,20 +26,20 @@
   --danger: var(--wow-red);
   --ok: var(--wow-green);
   --line: var(--wow-border-soft);
-  --radius: 9px;
-  --tabs-height: 54px;
+  --radius: 12px;
+  --tabs-height: 64px;
   --notes-composer-height: 60px;
   --notes-composer-live-height: 60px;
 
-  --body-bg: #eef2f7;
-  --button-bg: #f4f7fb;
-  --button-bg-active: #e8eef7;
-  --button-border: #c9d5e4;
+  --body-bg: #f5f7f6;
+  --button-bg: #ffffff;
+  --button-bg-active: #e8f1eb;
+  --button-border: #ccd8d1;
   --button-shadow: none;
-  --button-hover-text: #0f3566;
-  --button-primary-bg: #1f4f8a;
+  --button-hover-text: #244b39;
+  --button-primary-bg: #315f4c;
   --button-primary-text: #ffffff;
-  --button-primary-border: #1a4478;
+  --button-primary-border: #315f4c;
 }
 
 :root[data-theme="wow"] {
@@ -91,12 +91,14 @@ body {
   color: var(--text);
   background: var(--body-bg);
   overflow: hidden;
+  line-height: 1.5;
 }
 
 input,
 textarea,
 select,
 button {
+  min-height: 44px;
   font: inherit;
   font-family: var(--wow-font);
   color: var(--text);
@@ -200,6 +202,15 @@ button.danger {
 :root[data-theme="light"] * {
   text-shadow: none !important;
 }
+
+:root[data-theme="light"] button.active,
+:root[data-theme="light"] button.ok,
+:root[data-theme="light"] .button-primary {
+  box-shadow: none;
+}
+:root[data-theme="light"] button:hover { transform: none; background: var(--button-bg-active); }
+:root[data-theme="light"] .button-primary:hover { background: #244b39; color: white; }
+:root[data-theme="light"] .app::before { display: none; }
 
 @keyframes fade-in {
   from {
