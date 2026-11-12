@@ -880,3 +880,68 @@ test("tab headers sit directly below the top bar without a blank spacer", async 
     expect(Math.abs(tabBar!.y - (topBar!.y + topBar!.height))).toBeLessThanOrEqual(1);
   }
 });
+
+test("item cards use tighter padding without shrinking actions or hiding timestamps", async ({ page }) => {
+  await seed(page);
+  for (const [name, selector] of [["Notes", "#item-note-note-a"], ["Tasks", "#item-task-task-a"], ["Projects", "#item-project-project-a"]]) {
+    await tab(page, name).click();
+    const card = page.locator(selector);
+    expect(await card.evaluate(el => {
+      const style = getComputedStyle(el);
+      return [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft];
+    })).toEqual(["12px", "12px", "12px", "12px"]);
+    await expect(card.locator(".item-timestamp")).toBeVisible();
+    for (const button of await card.getByRole("button").all())
+      expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  }
+  await tab(page, "Tasks").click();
+  const actions = page.locator("#item-task-task-a .entity-side");
+  const edit = await actions.getByRole("button", { name: "Edit", exact: true }).boundingBox();
+  const done = await actions.getByRole("button", { name: "Complete Overdue task", exact: true }).boundingBox();
+  expect(Math.abs(edit!.y - done!.y)).toBeLessThanOrEqual(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("note composer centers one line and still grows, scrolls and captures multiline text", async ({ page }) => {
+  await page.goto("./");
+  await tab(page, "Notes").click();
+  const composer = page.getByRole("textbox", { name: "Add a note...", exact: true });
+  async function checkSingleLine() {
+    await expect.poll(async () => composer.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(44);
+    const geometry = await composer.evaluate(el => {
+      const s = getComputedStyle(el);
+      return { top: parseFloat(s.paddingTop), bottom: parseFloat(s.paddingBottom),
+        content: el.clientHeight - parseFloat(s.paddingTop) - parseFloat(s.paddingBottom),
+        line: parseFloat(s.lineHeight), font: parseFloat(s.fontSize) };
+    });
+    expect(geometry.top).toBe(geometry.bottom);
+    expect(geometry.content).toBe(geometry.line);
+    expect(geometry.font).toBe(16);
+  }
+  await checkSingleLine();
+  await composer.fill("One line");
+  await checkSingleLine();
+  await composer.fill("Multiline title\nSecond line\nThird line");
+  await expect.poll(async () => composer.evaluate(el => el.clientHeight)).toBeGreaterThan(44);
+  expect(await composer.evaluate(el => el.scrollHeight <= el.clientHeight)).toBe(true);
+  await composer.fill(Array.from({ length: 9 }, (_, i) => `Line ${i + 1}`).join("\n"));
+  await expect(composer).toHaveCSS("overflow-y", "auto");
+  expect((await composer.boundingBox())!.height).toBe(154);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.locator(".note-card").getByText("Line 1", { exact: true })).toBeVisible();
+  expect((await records(page, "notes"))[0].description).toBe(Array.from({ length: 8 }, (_, i) => `Line ${i + 2}`).join("\n"));
+  await checkSingleLine();
+});
+
+test("Today shows its controls without instructional paragraphs", async ({ page }) => {
+  await seed(page);
+  await expect(page.getByText("Choose up to three priorities for today.", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/No focus tasks yet\. Pick an open task/)).toHaveCount(0);
+  await expect(page.getByText(/Due and overdue work stays visible/)).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Choose focus task" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Pin", exact: true })).toBeVisible();
+  await page.locator(".today-task-card").filter({ hasText: "Overdue task" }).getByRole("button", { name: "Later", exact: true }).click();
+  await expect(page.getByText("The deadline does not change. Urgent deadlines remain visible.", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Tomorrow", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Next week", exact: true })).toBeVisible();
+});

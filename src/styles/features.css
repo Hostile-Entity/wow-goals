@@ -733,15 +733,17 @@
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 
 .cards { gap: 12px; }
-.card { padding: 18px; }
+.card { padding: 12px; }
 .title { font-size: 1rem; line-height: 1.5; font-weight: 650; margin-bottom: 6px; }
 .tags, .meta-row { font-size: .8rem; line-height: 1.5; }
-.card-footer { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 12px; margin-top: 8px; }
+.card-footer { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 8px; margin-top: 4px; }
 .card-footer-left { flex: 1 1 140px; }
+.card-footer-left:not(:has(> :not(:empty))) { display: none; }
 .item-timestamp { margin-left: auto; text-align: right; max-width: 100%; font-size: .72rem; color: var(--muted); }
 .item-timestamp time { white-space: nowrap; }
 .tags:empty { display: none; }
 .entity-side { gap: 6px; }
+.task-list .entity-side { flex-direction: row; }
 .manage-btn, .complete-task-btn { font-size: .8rem; min-width: 64px; margin-bottom: 0; }
 .entity-description, .note-description { color: var(--muted); font-size: .9rem; }
 .complete-task-btn { color: var(--accent-2); }

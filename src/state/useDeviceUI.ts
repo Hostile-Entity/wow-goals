@@ -48,10 +48,14 @@ export function useDeviceUI(
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "auto";
-    const max =
-      (parseFloat(getComputedStyle(textarea).lineHeight) || 20) * 6 + 20;
-    textarea.style.height = `${Math.min(textarea.scrollHeight, max)}px`;
-    textarea.style.overflowY = textarea.scrollHeight > max ? "auto" : "hidden";
+    const style = getComputedStyle(textarea);
+    const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    const borders = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+    const max = (parseFloat(style.lineHeight) || 22) * 6 + padding + borders;
+    // scrollHeight includes padding, but not borders; CSS uses border-box sizing.
+    const height = textarea.scrollHeight + borders;
+    textarea.style.height = `${Math.min(height, max)}px`;
+    textarea.style.overflowY = height > max ? "auto" : "hidden";
     const update = () =>
       document.documentElement.style.setProperty(
         "--notes-composer-live-height",

@@ -61,9 +61,6 @@ export function TodayTab({
         <p className="meta">{app.completedTodayCount} tasks done · {app.routinesTodayCount} routines done · {app.activeNoteCount} notes in inbox</p>
       </header>
       <h3>Focus 3</h3>
-      <p className="meta">
-        Choose up to three priorities for today.
-      </p>
       <div className="today-top3-list">
         {app.todayTop3.map((task) => (
           <div key={task.id}>
@@ -76,11 +73,6 @@ export function TodayTab({
             </button>
           </div>
         ))}
-        {!app.todayTop3.length && (
-          <p className="meta">
-            No focus tasks yet. Pick an open task below; deadlines are optional.
-          </p>
-        )}
       </div>
       <form
         className="row"
@@ -111,8 +103,7 @@ export function TodayTab({
         (id) => !app.todayTop3.some((task) => task.id === id),
       ) && (
         <div className="meta">
-          Some pins are hidden because the task is snoozed/closed or its project
-          is paused.{" "}
+          Hidden focus:{" "}
           {app.settings.focusTaskIds
             .filter((id) => !app.todayTop3.some((task) => task.id === id))
             .map((id) => (
@@ -128,7 +119,6 @@ export function TodayTab({
         </div>
       )}
       <h3>Other due tasks</h3>
-      <p className="meta">Due and overdue work stays visible, even when planned for later or its project is paused.</p>
       <div className="today-top3-list">
         {app.urgentTasks.map(row)}
         {!app.urgentTasks.length && (
@@ -139,9 +129,6 @@ export function TodayTab({
       {snooze && (
         <section className="card" aria-label="Snooze task">
           <h3>Plan “{snooze.title}” for later</h3>
-          <p className="meta">
-            The deadline does not change. Urgent deadlines remain visible.
-          </p>
           <div className="actions">
             <button
               onClick={() =>
