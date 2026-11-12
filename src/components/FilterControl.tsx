@@ -1,9 +1,8 @@
 import { FilterKey, StatusFilter } from "../state/useAppData";
-
-const options: StatusFilter[] = ["all", "in_progress", "active", "inactive", "completed", "discarded"];
+import { filterOptions } from "../state/lifecycle";
 
 function optionLabel(value: StatusFilter): string {
-  return value.replace("_", " ");
+  return value === "actionable" ? "open items" : value;
 }
 
 interface FilterControlProps {
@@ -14,15 +13,26 @@ interface FilterControlProps {
   onSelect(value: StatusFilter): void;
 }
 
-export function FilterControl({ current, isOpen, onToggle, onSelect }: FilterControlProps) {
+export function FilterControl({
+  filterKey,
+  current,
+  isOpen,
+  onToggle,
+  onSelect,
+}: FilterControlProps) {
   return (
     <div className="filter-wrap">
-      <button className="filter-btn" onClick={onToggle}>
+      <button
+        className="filter-btn"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        aria-controls={`filters-${filterKey}`}
+      >
         Filter: {optionLabel(current)}
       </button>
       {isOpen && (
-        <div className="filter-menu">
-          {options.map((option) => (
+        <div className="filter-menu" id={`filters-${filterKey}`}>
+          {filterOptions(filterKey).map((option) => (
             <button
               key={option}
               className={current === option ? "active" : ""}

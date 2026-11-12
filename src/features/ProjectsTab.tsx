@@ -1,79 +1,82 @@
 import { useMemo } from "react";
 import { AppData, formatDueLabel, getStatusBucket } from "../state/useAppData";
+import { projectTodos } from "../state/projectTodos";
 import { Project } from "../types";
 
-interface ProjectsTabProps {
+interface Props {
   filteredProjects: AppData["filteredProjects"];
   goals: AppData["state"]["goals"];
-  logicalDay: AppData["logicalDay"];
+  logicalDay: string;
   showStatus: boolean;
   statusLabel: AppData["statusLabel"];
-  onToggleTodo(projectId: string, lineIndex: number, checked: boolean): void;
   onManage(project: Project): void;
   formatDateTime(iso: string): string;
 }
-
-function parseTodoLine(line: string): { checked: boolean; text: string } {
-  const trimmed = line.trim();
-  if (/^\[(x|X)\]\s+/.test(trimmed)) return { checked: true, text: trimmed.replace(/^\[(x|X)\]\s+/, "") };
-  if (/^\[\s\]\s+/.test(trimmed)) return { checked: false, text: trimmed.replace(/^\[\s\]\s+/, "") };
-  return { checked: false, text: trimmed };
-}
-
-export function ProjectsTab({ filteredProjects, goals, logicalDay, showStatus, statusLabel, onToggleTodo, onManage, formatDateTime }: ProjectsTabProps) {
-  const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal.title])), [goals]);
-
+export function ProjectsTab({
+  filteredProjects,
+  goals,
+  logicalDay,
+  showStatus,
+  statusLabel,
+  onManage,
+  formatDateTime,
+}: Props) {
+  const goalById = useMemo(
+    () => new Map(goals.map((goal) => [goal.id, goal.title])),
+    [goals],
+  );
   return (
     <div className="cards">
+      {!filteredProjects.length && (
+        <p className="meta">
+          No projects in this view. Create a project or change the filter to see
+          history.
+        </p>
+      )}
       {filteredProjects.map((project) => {
         const bucket = getStatusBucket(project);
-        const cardToneClass = bucket === "in_progress" ? "is-in-progress" : bucket !== "active" ? "is-dimmed" : "";
-        const sourceDescription = (project.description ?? "").trim();
-        const todoLines = sourceDescription
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0);
-        const parsedTodo = todoLines.map((line, lineIndex) => ({ ...parseTodoLine(line), lineIndex }));
-        const undoneTodo = parsedTodo.filter((line) => !line.checked);
-        const completedCount = parsedTodo.filter((line) => line.checked).length;
-
+        const remaining = projectTodos(project.description).filter(
+          (todo) => !todo.checked,
+        ).length;
         return (
-          <article key={project.id} id={`item-project-${project.id}`} className={`card entity-card ${cardToneClass}`}>
+          <article
+            key={project.id}
+            id={`item-project-${project.id}`}
+            className={`card entity-card ${bucket === "in_progress" ? "is-in-progress" : bucket !== "active" ? "is-dimmed" : ""}`}
+          >
             <div className="card-top-row">
               <div className="entity-main">
                 <div className="title entity-title">{project.title}</div>
-                {parsedTodo.length > 0 ? (
-                  <>
-                    <div className="tags entity-summary">
-                      {completedCount}/{parsedTodo.length} TODOs done
-                    </div>
-                    <div className="project-todo-list">
-                      {undoneTodo.map((line) => (
-                        <label key={`${project.id}-${line.lineIndex}`} className="project-todo-item">
-                          <input
-                            type="checkbox"
-                            checked={line.checked}
-                            onChange={(e) => onToggleTodo(project.id, line.lineIndex, e.currentTarget.checked)}
-                          />
-                          <span className={line.checked ? "project-todo-done" : ""}>{line.text}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </>
-                ) : null}
+                <p className="project-summary">
+                  {project.summary || "No short description yet."}
+                </p>
+                <div className="tags entity-summary">
+                  {remaining} TODOs left
+                </div>
               </div>
               <div className="entity-side">
-                <button className="manage-btn" onClick={() => onManage(project)}>
-                  Manage
+                <button
+                  className="manage-btn"
+                  onClick={() => onManage(project)}
+                >
+                  Open
                 </button>
               </div>
             </div>
             <div className="card-footer">
               <div className="card-footer-left">
-                {showStatus ? <div className="tags entity-status entity-footer-meta">{statusLabel(project)}</div> : null}
+                {showStatus && (
+                  <div className="tags entity-status entity-footer-meta">
+                    {statusLabel(project)}
+                  </div>
+                )}
                 <div className="tags entity-summary entity-footer-meta">
-                  {project.deadline ? `${formatDueLabel(project.deadline, logicalDay)} | ` : ""}
-                  {project.goalId ? `goal ${goalById.get(project.goalId) ?? "Unknown"}` : "No goal linked"}
+                  {project.deadline
+                    ? `${formatDueLabel(project.deadline, logicalDay)} | `
+                    : ""}
+                  {project.goalId
+                    ? `goal ${goalById.get(project.goalId) ?? "Unknown"}`
+                    : "No goal linked"}
                 </div>
               </div>
               <div className="meta-row entity-meta-time">
