@@ -146,7 +146,8 @@ dialog.modal::backdrop { background: rgba(3, 6, 9, .86); }
 .action-error { color: var(--danger); padding: 10px; border: 1px solid currentColor; border-radius: 8px; overflow-wrap: anywhere; }
 .app-notice { padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
 .modal h4 { margin: 8px 0; }
-.modal button, .modal input:not([type=checkbox]), .modal select { min-height: 44px; }
+.modal button { min-height: var(--button-height); }
+.modal input:not([type=checkbox]), .modal select { min-height: 44px; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [role=button]:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
 
 .more-tabs {
@@ -178,7 +179,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   width: 100%;
 }
 
-.topbar { min-height: 72px; padding: 14px 20px; }
+.topbar { min-height: 60px; padding: 8px 20px; }
 .settings-btn, .filter-btn, .filter-menu button { font-size: .85rem; }
 .meta { font-size: .85rem; }
 .filter-menu { min-width: 160px; }
@@ -198,7 +199,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 @media (max-width: 500px) {
   .modal { padding: 16px; }
   .modal > .card-top { top: -16px; }
-  .topbar { padding: 12px 14px; }
+  .topbar { padding: 8px 14px; }
 }
 
 .modal-body { display: grid; gap: 14px; min-width: 0; }
@@ -223,7 +224,7 @@ dialog.entity-editor {
   position: static;
   flex: 0 0 auto;
   align-items: center;
-  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  padding: max(8px, env(safe-area-inset-top)) 16px 8px;
   border-bottom: 1px solid var(--line);
 }
 .entity-editor > .card-top h3 { margin: 0; font-size: 1.15rem; line-height: 1.4; }
@@ -239,11 +240,11 @@ dialog.entity-editor {
 .entity-editor > .modal-body > * + * { margin-top: 16px; }
 .entity-editor > .modal-footer {
   flex: 0 0 auto;
-  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  padding: 8px 16px max(8px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
   background: var(--panel);
 }
-.entity-editor > .modal-footer button { width: 100%; min-height: 48px; font-size: 1rem; }
+.entity-editor > .modal-footer button { width: 100%; min-height: var(--button-primary-height); font-size: 1rem; }
 .entity-editor input:not([type=checkbox]), .entity-editor textarea, .entity-editor select {
   font-size: 16px;
   min-width: 0;

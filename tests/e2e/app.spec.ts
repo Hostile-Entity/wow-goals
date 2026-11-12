@@ -881,7 +881,7 @@ test("tab headers sit directly below the top bar without a blank spacer", async 
   }
 });
 
-test("item cards use tighter padding without shrinking actions or hiding timestamps", async ({ page }) => {
+test("item cards use tighter padding and shorter actions without hiding timestamps", async ({ page }) => {
   await seed(page);
   for (const [name, selector] of [["Notes", "#item-note-note-a"], ["Tasks", "#item-task-task-a"], ["Projects", "#item-project-project-a"]]) {
     await tab(page, name).click();
@@ -892,7 +892,7 @@ test("item cards use tighter padding without shrinking actions or hiding timesta
     })).toEqual(["12px", "12px", "12px", "12px"]);
     await expect(card.locator(".item-timestamp")).toBeVisible();
     for (const button of await card.getByRole("button").all())
-      expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await button.boundingBox())!.height).toBe(36);
   }
   await tab(page, "Tasks").click();
   const actions = page.locator("#item-task-task-a .entity-side");
@@ -944,4 +944,23 @@ test("Today shows its controls without instructional paragraphs", async ({ page 
   await expect(page.getByText("The deadline does not change. Urgent deadlines remain visible.", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Tomorrow", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Next week", exact: true })).toBeVisible();
+});
+
+test("buttons are shorter while card action widths and form input heights stay unchanged", async ({ page }) => {
+  await seed(page);
+  for (const name of ["Search all items", "Open app settings"]) {
+    expect((await page.getByRole("button", { name, exact: true }).boundingBox())!.height).toBe(36);
+  }
+  await tab(page, "Notes").click();
+  const edit = page.locator("#item-note-note-a").getByRole("button", { name: "Edit", exact: true });
+  expect(await edit.boundingBox()).toMatchObject({ width: 64, height: 36 });
+  const add = page.getByRole("button", { name: "Add", exact: true });
+  expect((await add.boundingBox())!.height).toBe(40);
+  await expect(page.getByRole("textbox", { name: "Add a note...", exact: true })).toHaveCSS("min-height", "44px");
+  await edit.click();
+  const editor = page.getByRole("dialog");
+  expect((await editor.getByRole("button", { name: "Close", exact: true }).boundingBox())!.height).toBe(36);
+  expect((await editor.getByRole("button", { name: "Save", exact: true }).boundingBox())!.height).toBe(40);
+  expect((await editor.getByRole("textbox", { name: "Title", exact: true }).boundingBox())!.height).toBe(48);
+  expect((await editor.getByRole("button", { name: "Task", exact: true }).boundingBox())!.height).toBe(36);
 });

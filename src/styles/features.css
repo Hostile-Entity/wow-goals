@@ -298,8 +298,8 @@
 }
 
 .routine-btn {
-  min-height: 50px;
-  padding: 8px 10px;
+  min-height: var(--button-height);
+  padding: 4px 10px;
   display: flex;
   flex-direction: row;
   justify-content: center;
@@ -728,7 +728,7 @@
 .today-task-link { text-align: left; font-weight: 700; border: 0; background: transparent; padding-left: 0; }
 .note-side [role=toolbar] { flex-direction: column; }
 .today-task-link { max-width: 100%; overflow-wrap: anywhere; }
-.manage-btn, .note-side button, .today-task-actions button, .filter-btn, .filter-menu button, .more-tabs button { min-height: 44px; }
+.manage-btn, .note-side button, .today-task-actions button, .filter-btn, .filter-menu button, .more-tabs button { min-height: var(--button-height); }
 .routine-btn:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 
@@ -751,9 +751,9 @@
 .today-header h2 { margin-bottom: 4px; }
 .today-header p { margin: 0 0 18px; }
 .today-task-card { margin-bottom: 4px; }
-.today-task-link { min-height: 44px; line-height: 1.5; }
+.today-task-link { min-height: var(--button-height); line-height: 1.5; }
 .today-tab > .row { margin-top: 12px; }
-.review-grid { --review-grid-row-size: 44px; }
+.review-grid { --review-grid-row-size: 36px; }
 :root[data-theme="light"] .card, :root[data-theme="light"] .checklist, :root[data-theme="light"] .review-grid-wrap { border-color: var(--line); }
 :root[data-theme="light"] .is-dimmed { filter: none; border-color: var(--line); background: var(--panel-alt); box-shadow: none; }
 :root[data-theme="light"] .is-dimmed .title { color: var(--text); }
@@ -776,7 +776,7 @@
 .entity-editor .editor-schedule > :last-child:nth-of-type(odd) { grid-column: 1 / -1; }
 .entity-editor .editor-checklist .meta { margin: 0; }
 .entity-editor .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.entity-editor .actions button { width: 100%; min-height: 48px; font-size: .85rem; padding: 10px 12px; }
+.entity-editor .actions button { width: 100%; min-height: var(--button-height); font-size: .85rem; padding: 6px 12px; }
 .entity-editor .lifecycle-actions { padding-top: 16px; border-top: 1px solid var(--line); }
 .entity-editor .copy-note .meta:empty { display: none; }
 .entity-editor .entity-metadata { margin-top: 4px; padding-bottom: 0; }

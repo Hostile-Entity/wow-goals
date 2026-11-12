@@ -27,7 +27,9 @@
   --ok: var(--wow-green);
   --line: var(--wow-border-soft);
   --radius: 12px;
-  --tabs-height: 64px;
+  --tabs-height: 52px;
+  --button-height: 36px;
+  --button-primary-height: 40px;
   --notes-composer-height: 60px;
   --notes-composer-live-height: 60px;
 
@@ -119,11 +121,12 @@ textarea {
 }
 
 button {
+  min-height: var(--button-height);
   color: var(--wow-text-muted);
   border: 1px solid var(--button-border);
   background: var(--button-bg);
   border-radius: 7px;
-  padding: 6px 9px;
+  padding: 4px 9px;
   cursor: pointer;
   box-shadow: var(--button-shadow);
   transition: transform 100ms ease, border-color 150ms ease, color 150ms ease;
@@ -158,7 +161,8 @@ button.danger {
   background: var(--button-primary-bg);
   border: 2px solid var(--button-primary-border);
   border-radius: 7px;
-  padding: 10px 16px;
+  min-height: var(--button-primary-height);
+  padding: 6px 16px;
   font-weight: 600;
   color: var(--button-primary-text);
   text-shadow: none;
