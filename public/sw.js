@@ -1,4 +1,4 @@
-const CACHE_NAME = "wow-goals-v30";
+const CACHE_NAME = "wow-goals-v31";
 
 const scopeUrl = new URL(self.registration.scope);
 const BASE_PATH = scopeUrl.pathname;
@@ -22,7 +22,7 @@ function isNavigationRequest(request) {
 function canRuntimeCache(url) {
   if (!isSameOrigin(url)) return false;
   if (isServiceWorkerRequest(url)) return false;
-  return true;
+  return url.pathname.startsWith(BASE_PATH);
 }
 
 async function cacheAppShell(cache) {
@@ -30,9 +30,18 @@ async function cacheAppShell(cache) {
     APP_SHELL_URLS.map(async (url) => {
       const req = new Request(url, { cache: "reload" });
       const resp = await fetch(req);
-      if (resp.ok) {
-        await cache.put(req, resp.clone());
-      }
+      if (!resp.ok) throw new Error("App shell could not be cached");
+      await cache.put(req, resp.clone());
+      // First-visit JS/CSS often loads before this worker controls the page.
+      // Cache the built shell's exact hashed assets now, not only on later fetches.
+      const html = await resp.text();
+      const assets = [...html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|css)(?:\?[^"']*)?)["']/g)].map(match => new URL(match[1], new URL(url, self.location.origin)));
+      await Promise.all(assets.filter(asset => isSameOrigin(asset) && asset.pathname.startsWith(BASE_PATH)).map(async asset => {
+        const request = new Request(asset.href, { cache: "reload" });
+        const response = await fetch(request);
+        if (!response.ok) throw new Error("An app asset could not be cached");
+        await cache.put(request, response);
+      }));
     }),
   );
 }
@@ -95,7 +104,7 @@ self.addEventListener("activate", (event) => {
       const keys = await caches.keys();
       await Promise.all(
         keys.map((key) => {
-          if (key === CACHE_NAME) return null;
+          if (key === CACHE_NAME || !key.startsWith("wow-goals-v")) return null;
           return caches.delete(key);
         }),
       );

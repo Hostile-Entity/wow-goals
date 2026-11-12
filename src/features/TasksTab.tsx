@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { AppData, formatDueLabel, getStatusBucket } from "../state/useAppData";
 import { Task } from "../types";
+import { priorityLabel } from "../state/lifecycle";
 
 interface TasksTabProps {
   filteredTasks: AppData["filteredTasks"];
@@ -13,22 +14,48 @@ interface TasksTabProps {
   formatDateTime(iso: string): string;
 }
 
-export function TasksTab({ filteredTasks, goals, projects, logicalDay, showStatus, statusLabel, onManage, formatDateTime }: TasksTabProps) {
-  const goalById = useMemo(() => new Map(goals.map((goal) => [goal.id, goal.title])), [goals]);
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project.title])), [projects]);
+export function TasksTab({
+  filteredTasks,
+  goals,
+  projects,
+  logicalDay,
+  showStatus,
+  statusLabel,
+  onManage,
+  formatDateTime,
+}: TasksTabProps) {
+  const goalById = useMemo(
+    () => new Map(goals.map((goal) => [goal.id, goal.title])),
+    [goals],
+  );
+  const projectById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project.title])),
+    [projects],
+  );
 
   return (
     <div className="cards">
       {filteredTasks.map((task) => {
         const bucket = getStatusBucket(task);
-        const cardToneClass = bucket === "in_progress" ? "is-in-progress" : bucket !== "active" ? "is-dimmed" : "";
+        const cardToneClass =
+          bucket === "in_progress"
+            ? "is-in-progress"
+            : bucket !== "active"
+              ? "is-dimmed"
+              : "";
 
         return (
-          <article key={task.id} id={`item-task-${task.id}`} className={`card entity-card ${cardToneClass}`}>
+          <article
+            key={task.id}
+            id={`item-task-${task.id}`}
+            className={`card entity-card ${cardToneClass}`}
+          >
             <div className="card-top-row">
               <div className="entity-main">
                 <div className="title entity-title">{task.title}</div>
-                {task.description ? <div className="entity-description">{task.description}</div> : null}
+                {task.description ? (
+                  <div className="entity-description">{task.description}</div>
+                ) : null}
               </div>
               <div className="entity-side">
                 <button className="manage-btn" onClick={() => onManage(task)}>
@@ -38,11 +65,24 @@ export function TasksTab({ filteredTasks, goals, projects, logicalDay, showStatu
             </div>
             <div className="card-footer">
               <div className="card-footer-left">
-                {showStatus ? <div className="tags entity-status entity-footer-meta">{statusLabel(task)}</div> : null}
+                {showStatus ? (
+                  <div className="tags entity-status entity-footer-meta">
+                    {statusLabel(task)}
+                  </div>
+                ) : null}
                 <div className="tags entity-summary entity-footer-meta">
-                  {task.deadline ? `${formatDueLabel(task.deadline, logicalDay)} | ` : ""}postponed {task.postponedCount}
-                  {task.goalId ? ` | goal ${goalById.get(task.goalId) ?? "Unknown"}` : ""}
-                  {task.projectId ? ` | project ${projectById.get(task.projectId) ?? "Unknown"}` : ""}
+                  {priorityLabel(task.priority)} |{" "}
+                  {task.deadline
+                    ? `${formatDueLabel(task.deadline, logicalDay)} | `
+                    : ""}
+                  postponed {task.postponedCount}
+                  {task.scheduledFor ? ` | scheduled ${task.scheduledFor}` : ""}
+                  {task.goalId
+                    ? ` | goal ${goalById.get(task.goalId) ?? "Unknown"}`
+                    : ""}
+                  {task.projectId
+                    ? ` | project ${projectById.get(task.projectId) ?? "Unknown"}`
+                    : ""}
                 </div>
               </div>
               <div className="meta-row entity-meta-time">

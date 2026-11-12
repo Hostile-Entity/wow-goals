@@ -1,6 +1,11 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { Dialog } from "./Dialog";
+import { useAction } from "./useAction";
 
 interface SettingsModalProps {
+  lastBackupAt?: string;
+  backupDue: boolean;
+  exportSafetySnapshot(which: "pre-v2" | "pre-import"): Promise<void>;
   showDebugTools: boolean;
   setShowDebugTools(next: boolean): void;
   swVersion: string;
@@ -15,7 +20,7 @@ interface SettingsModalProps {
   closeSettingsPopup(): void;
   checkForUpdates(): Promise<void>;
   exportData(): Promise<void>;
-  importData(file: File): Promise<void>;
+  importData(file: File): Promise<unknown>;
   deleteAllData(): Promise<void>;
   decrementLogicalDay(): Promise<void>;
   incrementLogicalDay(): Promise<void>;
@@ -29,6 +34,9 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({
+  lastBackupAt,
+  backupDue,
+  exportSafetySnapshot,
   showDebugTools,
   setShowDebugTools,
   swVersion,
@@ -56,127 +64,227 @@ export function SettingsModal({
   openCompleteLog,
 }: SettingsModalProps) {
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const action = useAction();
+  const [info, setInfo] = useState("");
 
   return (
-    <div className="modal-backdrop" onClick={closeSettingsPopup}>
-      <section className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="card-top">
-          <h3>App Settings</h3>
-          <button onClick={closeSettingsPopup}>Close</button>
+    <Dialog
+      title="App Settings"
+      close={closeSettingsPopup}
+      busy={action.pending}
+    >
+      {action.error && (
+        <p className="action-error" role="alert">
+          {action.error}
+        </p>
+      )}
+      {info && <p role="status">{info}</p>}
+      <div className="card">
+        <div className="title">Application Version</div>
+        <div className="tags">Version: {swVersion}</div>
+        <div className="actions">
+          <button
+            onClick={() => void checkForUpdates()}
+            disabled={isCheckingUpdate || isApplyingUpdate}
+          >
+            {isApplyingUpdate
+              ? "Applying update..."
+              : isCheckingUpdate
+                ? "Checking updates..."
+                : "Check for update"}
+          </button>
+          <button onClick={() => setShowDebugTools(!showDebugTools)}>
+            {showDebugTools ? "Hide debug tools" : "Debug tools"}
+          </button>
         </div>
-        <div className="card">
-          <div className="title">Application Version</div>
-          <div className="tags">Version: {swVersion}</div>
-          <div className="actions">
-            <button onClick={() => void checkForUpdates()} disabled={isCheckingUpdate || isApplyingUpdate}>
-              {isApplyingUpdate ? "Applying update..." : isCheckingUpdate ? "Checking updates..." : "Check for update"}
-            </button>
-            <button onClick={() => setShowDebugTools(!showDebugTools)}>{showDebugTools ? "Hide debug tools" : "Debug tools"}</button>
-          </div>
+      </div>
+      <div className="card">
+        <div className="title">Data Management</div>
+        <div className="tags">
+          Data stays in this browser on this device. Installing the app does not
+          back it up. Persistent storage is requested when supported, but is not
+          a backup guarantee.
         </div>
-        <div className="card">
-          <div className="title">Data Management</div>
-          <div className="tags">Export, import, or reset your app data.</div>
-          <div className="actions">
-            <button onClick={() => void exportData()}>Export data to JSON</button>
-            <button onClick={() => importInputRef.current?.click()}>Import data from JSON</button>
-            <button onClick={openCompleteLog}>Complete log</button>
-            <button className="danger" onClick={() => void deleteAllData()}>
-              Delete all data
-            </button>
-          </div>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json,.json"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const file = e.currentTarget.files?.[0];
-              if (file) {
-                void importData(file);
-              }
-              e.currentTarget.value = "";
-            }}
-          />
+        <p className="meta">
+          {lastBackupAt
+            ? `Last backup export requested: ${new Date(lastBackupAt).toLocaleString()}`
+            : "No backup exported yet."}{" "}
+          {backupDue
+            ? "A fresh backup is recommended."
+            : "Keep the downloaded file somewhere safe."}
+        </p>
+        <div className="actions">
+          <button
+            disabled={action.pending}
+            onClick={() => void action.run(exportData)}
+          >
+            Export data to JSON
+          </button>
+          <button onClick={() => importInputRef.current?.click()}>
+            Import data from JSON
+          </button>
+          <button onClick={openCompleteLog}>Complete log</button>
+          <button
+            className="danger"
+            disabled={action.pending}
+            onClick={() => void action.run(deleteAllData)}
+          >
+            Delete all data
+          </button>
         </div>
-        <div className="card">
-          <div className="title">Day Boundary</div>
-          <div className="tags">A new calendar day starts at {String(dayStartHour).padStart(2, "0")}:00 local time.</div>
+        <details>
+          <summary>One-time transition and restore safety</summary>
+          <p className="meta">
+            Existing TODO source text is unchanged. Old statuses map to the new
+            lifecycle. Priorities map 1 → High, 2 → Normal, 3+ → Low; the
+            original numeric rank is retained as a tie-breaker. Existing moved
+            deadlines are preserved, not guessed. The upgrade is atomic and runs
+            once.
+          </p>
           <div className="actions">
             <button
+              onClick={() =>
+                void action.run(() => exportSafetySnapshot("pre-v2"))
+              }
+            >
+              Export original pre-upgrade data
+            </button>
+            <button
+              onClick={() =>
+                void action.run(() => exportSafetySnapshot("pre-import"))
+              }
+            >
+              Export pre-restore safety data
+            </button>
+          </div>
+        </details>
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0];
+            if (file) {
+              setInfo("");
+              void action.run(
+                () => importData(file),
+                () => setInfo("Backup restored successfully."),
+              );
+            }
+            e.currentTarget.value = "";
+          }}
+        />
+      </div>
+      <div className="card">
+        <div className="title">Day Boundary</div>
+        <div className="tags">
+          A new calendar day starts at {String(dayStartHour).padStart(2, "0")}
+          :00 local time.
+        </div>
+        <div className="actions">
+          <button
+            onClick={() => {
+              const raw = window.prompt(
+                "Set day boundary hour (0-23)",
+                String(dayStartHour),
+              );
+              if (raw === null) return;
+              const hour = Number(raw);
+              if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
+                window.alert("Please enter an hour from 0 to 23.");
+                return;
+              }
+              void action.run(() => setDayStartHour(Math.trunc(hour)));
+            }}
+          >
+            Set Day Boundary
+          </button>
+        </div>
+      </div>
+      <div className="card">
+        <div className="title">Sound</div>
+        <div className="tags">Button click volume is muted by default.</div>
+        <div className="settings-volume-row">
+          <input
+            className="settings-volume-slider"
+            type="range"
+            aria-label="Button click volume"
+            min={0}
+            max={100}
+            value={soundVolume}
+            onChange={(e) => {
+              void action.run(() =>
+                setSoundVolume(Number(e.currentTarget.value)),
+              );
+            }}
+          />
+          <div className="meta-row settings-volume-value">
+            {soundVolume === 0 ? "Muted" : `${soundVolume}%`}
+          </div>
+        </div>
+      </div>
+      <div className="card">
+        <div className="title">Display</div>
+        <div className="tags">Show or hide item status labels on cards.</div>
+        <div className="actions">
+          <button
+            onClick={() => void action.run(() => setShowStatus(!showStatus))}
+          >
+            {showStatus ? "Show status: On" : "Show status: Off"}
+          </button>
+        </div>
+      </div>
+      <div className="card">
+        <div className="title">Theme</div>
+        <div className="tags">Choose visual style.</div>
+        <div className="actions settings-theme-options">
+          <button
+            className={theme === "light" ? "active" : ""}
+            onClick={() => void action.run(() => setTheme("light"))}
+          >
+            Light
+          </button>
+          <button
+            className={theme === "wow" ? "active" : ""}
+            onClick={() => void action.run(() => setTheme("wow"))}
+          >
+            WOW
+          </button>
+        </div>
+      </div>
+      {showDebugTools && (
+        <div className="card">
+          <div className="title">Debug Date Control</div>
+          <div className="tags">
+            Logical Day: {logicalDay} (offset{" "}
+            {logicalOffset >= 0 ? `+${logicalOffset}` : logicalOffset})
+          </div>
+          <div className="actions">
+            <button onClick={() => void action.run(decrementLogicalDay)}>
+              -1 Day
+            </button>
+            <button onClick={() => void action.run(incrementLogicalDay)}>
+              +1 Day
+            </button>
+            <button onClick={() => void action.run(resetLogicalDayToToday)}>
+              Reset to Today
+            </button>
+            <button
               onClick={() => {
-                const raw = window.prompt("Set day boundary hour (0-23)", String(dayStartHour));
-                if (raw === null) return;
-                const hour = Number(raw);
-                if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
-                  window.alert("Please enter an hour from 0 to 23.");
-                  return;
-                }
-                void setDayStartHour(hour);
+                const day = window.prompt(
+                  "Set logical day YYYY-MM-DD",
+                  logicalDay,
+                );
+                if (day && /^\d{4}-\d{2}-\d{2}$/.test(day))
+                  void action.run(() => setLogicalDay(day));
               }}
             >
-              Set Day Boundary
+              Set Date
             </button>
           </div>
         </div>
-        <div className="card">
-          <div className="title">Sound</div>
-          <div className="tags">Button click volume is muted by default.</div>
-          <div className="settings-volume-row">
-            <input
-              className="settings-volume-slider"
-              type="range"
-              min={0}
-              max={100}
-              value={soundVolume}
-              onChange={(e) => {
-                void setSoundVolume(Number(e.currentTarget.value));
-              }}
-            />
-            <div className="meta-row settings-volume-value">{soundVolume === 0 ? "Muted" : `${soundVolume}%`}</div>
-          </div>
-        </div>
-        <div className="card">
-          <div className="title">Display</div>
-          <div className="tags">Show or hide item status labels on cards.</div>
-          <div className="actions">
-            <button onClick={() => void setShowStatus(!showStatus)}>{showStatus ? "Show status: On" : "Show status: Off"}</button>
-          </div>
-        </div>
-        <div className="card">
-          <div className="title">Theme</div>
-          <div className="tags">Choose visual style.</div>
-          <div className="actions settings-theme-options">
-            <button className={theme === "light" ? "active" : ""} onClick={() => void setTheme("light")}>
-              Light
-            </button>
-            <button className={theme === "wow" ? "active" : ""} onClick={() => void setTheme("wow")}>
-              WOW
-            </button>
-          </div>
-        </div>
-        {showDebugTools && (
-          <div className="card">
-            <div className="title">Debug Date Control</div>
-            <div className="tags">
-              Logical Day: {logicalDay} (offset {logicalOffset >= 0 ? `+${logicalOffset}` : logicalOffset})
-            </div>
-            <div className="actions">
-              <button onClick={() => void decrementLogicalDay()}>-1 Day</button>
-              <button onClick={() => void incrementLogicalDay()}>+1 Day</button>
-              <button onClick={() => void resetLogicalDayToToday()}>Reset to Today</button>
-              <button
-                onClick={() => {
-                  const day = window.prompt("Set logical day YYYY-MM-DD", logicalDay);
-                  if (day) void setLogicalDay(day);
-                }}
-              >
-                Set Date
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
-    </div>
+      )}
+    </Dialog>
   );
 }

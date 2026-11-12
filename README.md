@@ -1,45 +1,55 @@
 # WowGoals
 
-WowGoals is a mobile-first goals tracker PWA built with Vite + React + TypeScript + IndexedDB.
+WowGoals is a mobile-first, local-only personal execution PWA: capture notes → triage → execute tasks/projects and daily routines → review the week.
 
-The app is designed as a control layer for personal execution: capture notes quickly, triage them into actionable items, prioritize work, complete tasks/routines, and run weekly reviews.
+## Current behavior
 
-## Current implementation
-
-- **Tech stack**: Vite, React 18, TypeScript 5, native IndexedDB, service worker PWA setup.
-- **Tabs**: Notes, Tasks, Today, Routines, Projects, Goals, Review, Debug.
-- **Capture + triage**: Create notes and convert them into tasks, projects, goals, or routines.
-- **Task management**: Priorities, deadlines, postpone, complete, and quick add.
-- **Today view**: Stats, top-3 tasks, one-tap routine completion buttons.
-- **Routines tab**: Dedicated routine management with goal linking.
-- **Projects/Goals**: Active/inactive projects, goal progress bars, linked-item visibility.
-- **Goal metrics**: Multiple metrics per goal with one primary metric used on the main card.
-- **Weekly review**: Checklist + history.
-- **Auditability**: Global event log for actions (including discard/postpone/recover/delete/debug date changes).
-- **Lifecycle controls**: Discard, recover, and permanent delete with confirmation.
-- **Debug tools**: Logical date simulation (+1/-1/set date/reset).
-- **UX updates**: Per-item `Manage` popup to reduce card clutter, metadata visible on cards.
-- **PWA update flow**: Settings popup with app version and update check/apply actions.
+- **Notes:** fast multiline capture; select a note for Copy/Manage; convert the current draft with provenance and safe Undo.
+- **Tasks:** named priorities, deadlines independent of planned dates, completion through Manage or Today, recoverable discard.
+- **Today:** three pinned focus tasks, a separate urgent-deadline list, snooze with Undo and daily routine check-ins.
+- **Projects:** compact summary/count cards; detail popup with the original newline-based checklist, completed items and separate linked Tasks; Complete/Reopen without cascading changes.
+- **Goals:** primary metric on cards, quick value updates, full metrics/charts and linked work in details, Achieve/Reopen.
+- **Review:** actionable prompts, weekly checklist/reflection and stable completion/history days.
+- **Navigation:** Notes, Tasks, Today, Projects, More; More contains Review, Goals and Routines. Entity-specific filters remember your preferences; global search reveals matches without replacing those preferences.
+- **Safety:** one-time atomic database upgrade, validated atomic JSON restore, pre-upgrade/pre-import safety snapshots, visible save failures and accessible, dirty-protected dialogs.
+- **PWA:** offline shell/assets, manual update handling using installed-worker version, optional sound/themes and date debugging. No account, server, analytics or cloud synchronization.
 
 ## Development
 
+Requires Node.js 22.12+ (Node 24 recommended).
+
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
-## Production build
-
 ```bash
+npm test
 npm run build
+npx playwright install chromium
+npm run test:e2e
+npm audit
 ```
 
-## Deploy (GitHub Pages)
+Browser tests serve the production build on loopback port 4173 under the GitHub Pages base path. They use isolated test data, not your installed app's database. Service workers register only in production builds.
+
+## Organization
+
+- `src/App.tsx`: screen/dialog orchestration.
+- `src/state/`: commands, lifecycle/filter/sorting rules, history, device/PWA hooks and targeted React state updates.
+- `src/db/`: IndexedDB transactions, one-time migration and backup validation.
+- `src/features/`: tab-level UI; `src/components/`: shared dialogs/editors/controls.
+- `src/styles/`: theme, layout, shared component and feature styles.
+- `tests/`: migration/command regression tests and production browser tests.
+
+## Deployment and transition
 
 ```bash
 npm run deploy
 ```
 
-This publishes `dist` to the `gh-pages` branch for:
+Publishes to `https://hostile-entity.github.io/wow-goals/`.
 
-`https://hostile-entity.github.io/wow-goals/`
+**Before this update, export your existing data to a file.** The new app upgrades the existing IndexedDB once, in one transaction, and keeps an exportable original snapshot. Close old app tabs/windows so they do not block the upgrade. Do not clear browser storage or redeploy the old build after transitioning.
+
+See [the product update and migration notes](docs/product-update.md) for every selected decision, exact mappings, safety behavior and validation scope. Persistent browser storage and a PWA installation are not substitutes for an off-device backup.

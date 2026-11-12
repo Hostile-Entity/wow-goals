@@ -7,7 +7,7 @@ interface BottomTabsProps {
 
 export function BottomTabs({ tab, setTab }: BottomTabsProps) {
   return (
-    <nav className="tabs">
+    <nav className="tabs" aria-label="Main navigation">
       {[
         ["notes", "Notes"],
         ["tasks", "Tasks"],
@@ -15,7 +15,12 @@ export function BottomTabs({ tab, setTab }: BottomTabsProps) {
         ["projects", "Projects"],
         ["more", "More"],
       ].map(([id, label]) => (
-        <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id as Tab)}>
+        <button
+          key={id}
+          aria-current={tab === id ? "page" : undefined}
+          className={tab === id ? "active" : ""}
+          onClick={() => setTab(id as Tab)}
+        >
           {label}
         </button>
       ))}

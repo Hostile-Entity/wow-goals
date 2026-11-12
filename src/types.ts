@@ -1,6 +1,18 @@
 export type EntityType = "note" | "task" | "project" | "goal" | "routine";
 
-export type ItemStatus = "active" | "in_progress" | "completed" | "discarded";
+export type ItemStatus =
+  | "inbox"
+  | "reference"
+  | "processed"
+  | "open"
+  | "doing"
+  | "done"
+  | "planned"
+  | "active"
+  | "paused"
+  | "enabled"
+  | "achieved"
+  | "discarded";
 
 export interface BaseEntity {
   id: string;
@@ -13,6 +25,8 @@ export interface BaseEntity {
 
 export interface Note extends BaseEntity {
   triagedTo?: EntityType;
+  triagedId?: string;
+  triagePreviousStatus?: ItemStatus;
 }
 
 export interface Goal extends BaseEntity {
@@ -30,7 +44,9 @@ export interface GoalMetric {
 export interface Project extends BaseEntity {
   goalId?: string;
   deadline?: string;
-  isActive: boolean;
+  /** Description remains the original newline TODO source; summary is prose. */
+  summary: string;
+  completedAt?: string;
 }
 
 export interface Task extends BaseEntity {
@@ -40,6 +56,8 @@ export interface Task extends BaseEntity {
   priority: number;
   postponedCount: number;
   lastPostponedAt?: string;
+  scheduledFor?: string;
+  legacyPriority?: number;
 }
 
 export interface Routine extends BaseEntity {
@@ -81,6 +99,8 @@ export interface AppSettings {
   soundVolume: number;
   showStatus: boolean;
   theme: "light" | "wow";
+  focusTaskIds: string[];
+  lastBackupAt?: string;
 }
 
 export interface AppStateData {

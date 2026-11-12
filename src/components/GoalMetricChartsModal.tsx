@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { addDays, toDayString } from "../db";
 import { EventLog, Goal, GoalMetric } from "../types";
+import { Dialog } from "./Dialog";
 
 type MetricPoint = { day: string; value: number };
 
@@ -22,7 +23,9 @@ function goalMetrics(goal: Goal): GoalMetric[] {
   if (goal.metrics.length > 0) {
     return goal.metrics;
   }
-  return [{ id: goal.primaryMetricId, name: "Progress", current: 0, target: 10 }];
+  return [
+    { id: goal.primaryMetricId, name: "Progress", current: 0, target: 10 },
+  ];
 }
 
 function sortMetricsPrimaryFirst(goal: Goal): GoalMetric[] {
@@ -35,7 +38,16 @@ function sortMetricsPrimaryFirst(goal: Goal): GoalMetric[] {
   });
 }
 
-function parseMetricUpdate(log: EventLog, dayStartHour: number): { metricId: string; metricName: string; day: string; value: number; at: string } | null {
+function parseMetricUpdate(
+  log: EventLog,
+  dayStartHour: number,
+): {
+  metricId: string;
+  metricName: string;
+  day: string;
+  value: number;
+  at: string;
+} | null {
   if (log.action !== "goal-metric-update") return null;
   let detail: MetricUpdateDetail | null = null;
   try {
@@ -53,7 +65,9 @@ function parseMetricUpdate(log: EventLog, dayStartHour: number): { metricId: str
   };
 }
 
-function buildMetricSeries(updates: Array<{ day: string; value: number; at: string }>): MetricPoint[] {
+function buildMetricSeries(
+  updates: Array<{ day: string; value: number; at: string }>,
+): MetricPoint[] {
   if (updates.length === 0) return [];
   const byDay = new Map<string, { value: number; at: string }>();
   for (const update of updates.sort((a, b) => a.at.localeCompare(b.at))) {
@@ -80,11 +94,19 @@ function buildMetricSeries(updates: Array<{ day: string; value: number; at: stri
   return series;
 }
 
-export function GoalMetricChartsModal({ goal, logs, dayStartHour, close }: GoalMetricChartsModalProps) {
+export function GoalMetricChartsModal({
+  goal,
+  logs,
+  dayStartHour,
+  close,
+}: GoalMetricChartsModalProps) {
   const orderedMetrics = useMemo(() => sortMetricsPrimaryFirst(goal), [goal]);
 
   const metricData = useMemo(() => {
-    const metricLogMap = new Map<string, Array<{ day: string; value: number; at: string; metricName: string }>>();
+    const metricLogMap = new Map<
+      string,
+      Array<{ day: string; value: number; at: string; metricName: string }>
+    >();
     for (const log of logs) {
       if (log.entityType !== "goal" || log.entityId !== goal.id) continue;
       const update = parseMetricUpdate(log, dayStartHour);
@@ -97,7 +119,13 @@ export function GoalMetricChartsModal({ goal, logs, dayStartHour, close }: GoalM
     return orderedMetrics.map((metric) => {
       const updates = metricLogMap.get(metric.id) ?? [];
       const series = buildMetricSeries(updates);
-      const fallbackNames = Array.from(new Set(updates.map((item) => item.metricName).filter((name) => name && name !== metric.name)));
+      const fallbackNames = Array.from(
+        new Set(
+          updates
+            .map((item) => item.metricName)
+            .filter((name) => name && name !== metric.name),
+        ),
+      );
       return {
         metric,
         series,
@@ -107,66 +135,95 @@ export function GoalMetricChartsModal({ goal, logs, dayStartHour, close }: GoalM
   }, [goal.id, logs, dayStartHour, orderedMetrics]);
 
   return (
-    <div className="modal-backdrop" onClick={close}>
-      <section className="modal metric-charts-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="card-top">
-          <h3>Metric Charts</h3>
-          <button onClick={close}>Close</button>
-        </div>
-        <div className="meta-row">{goal.title}</div>
+    <Dialog title="Metric Charts" close={close} className="metric-charts-modal">
+      <div className="meta-row">{goal.title}</div>
 
-        <div className="cards">
-          {metricData.map(({ metric, series, fallbackNames }) => {
-            const values = series.map((point) => point.value);
-            const max = values.length > 0 ? Math.max(...values) : 0;
-            const yMax = max <= 0 ? 1 : max * 1.1;
-            const width = 320;
-            const height = 120;
-            const pad = 16;
-            const points = series.map((point, index) => {
-              const x =
-                series.length === 1
-                  ? width / 2
-                  : pad + (index / (series.length - 1)) * (width - pad * 2);
-              const y = height - pad - (point.value / yMax) * (height - pad * 2);
-              return { x, y, ...point };
-            });
-            const pathD = points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" ");
+      <div className="cards">
+        {metricData.map(({ metric, series, fallbackNames }) => {
+          const values = series.map((point) => point.value);
+          const max = values.length > 0 ? Math.max(...values) : 0;
+          const yMax = max <= 0 ? 1 : max * 1.1;
+          const width = 320;
+          const height = 120;
+          const pad = 16;
+          const points = series.map((point, index) => {
+            const x =
+              series.length === 1
+                ? width / 2
+                : pad + (index / (series.length - 1)) * (width - pad * 2);
+            const y = height - pad - (point.value / yMax) * (height - pad * 2);
+            return { x, y, ...point };
+          });
+          const pathD = points
+            .map(
+              (point, index) =>
+                `${index === 0 ? "M" : "L"}${point.x.toFixed(2)} ${point.y.toFixed(2)}`,
+            )
+            .join(" ");
 
-            return (
-              <article key={metric.id} className="card metric-chart-card">
-                <div className="title">{metric.name}</div>
-                {fallbackNames.length > 0 && <div className="tags">Also logged as: {fallbackNames.join(", ")}</div>}
+          return (
+            <article key={metric.id} className="card metric-chart-card">
+              <div className="title">{metric.name}</div>
+              {fallbackNames.length > 0 && (
+                <div className="tags">
+                  Also logged as: {fallbackNames.join(", ")}
+                </div>
+              )}
 
-                {series.length > 0 ? (
-                  <>
-                    <svg viewBox={`0 0 ${width} ${height}`} className="metric-chart" role="img" aria-label={`${metric.name} history chart`}>
-                      <line x1={pad} y1={height - pad} x2={width - pad} y2={height - pad} className="metric-chart-axis" />
-                      <path d={pathD} className="metric-chart-line" />
-                      <text x={pad} y={height - pad - 4} className="metric-chart-axis-label">
-                        0
-                      </text>
-                      {points.map((point) => (
-                        <g key={`${metric.id}-${point.day}`}>
-                          <text x={point.x} y={Math.max(10, point.y - 8)} textAnchor="middle" className="metric-chart-point-label">
-                            {point.value}
-                          </text>
-                          <circle cx={point.x} cy={point.y} r="2.6" className="metric-chart-dot" />
-                        </g>
-                      ))}
-                    </svg>
-                    <div className="meta-row metric-chart-meta">
-                      {series[0].day} to {series[series.length - 1].day} ({series.length} days)
-                    </div>
-                  </>
-                ) : (
-                  <div className="meta-row">No metric updates yet.</div>
-                )}
-              </article>
-            );
-          })}
-        </div>
-      </section>
-    </div>
+              {series.length > 0 ? (
+                <>
+                  <svg
+                    viewBox={`0 0 ${width} ${height}`}
+                    className="metric-chart"
+                    role="img"
+                    aria-label={`${metric.name} history chart`}
+                  >
+                    <line
+                      x1={pad}
+                      y1={height - pad}
+                      x2={width - pad}
+                      y2={height - pad}
+                      className="metric-chart-axis"
+                    />
+                    <path d={pathD} className="metric-chart-line" />
+                    <text
+                      x={pad}
+                      y={height - pad - 4}
+                      className="metric-chart-axis-label"
+                    >
+                      0
+                    </text>
+                    {points.map((point) => (
+                      <g key={`${metric.id}-${point.day}`}>
+                        <text
+                          x={point.x}
+                          y={Math.max(10, point.y - 8)}
+                          textAnchor="middle"
+                          className="metric-chart-point-label"
+                        >
+                          {point.value}
+                        </text>
+                        <circle
+                          cx={point.x}
+                          cy={point.y}
+                          r="2.6"
+                          className="metric-chart-dot"
+                        />
+                      </g>
+                    ))}
+                  </svg>
+                  <div className="meta-row metric-chart-meta">
+                    {series[0].day} to {series[series.length - 1].day} (
+                    {series.length} days)
+                  </div>
+                </>
+              ) : (
+                <div className="meta-row">No metric updates yet.</div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </Dialog>
   );
 }

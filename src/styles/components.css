@@ -139,6 +139,16 @@ mark {
   gap: 10px;
 }
 
+dialog.modal { color: var(--text); margin: auto; }
+dialog.modal:not([open]) { display: none; }
+dialog.modal::backdrop { background: rgba(3, 6, 9, .86); }
+.editor-fields { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 12px; }
+.action-error { color: var(--danger); padding: 10px; border: 1px solid currentColor; border-radius: 8px; overflow-wrap: anywhere; }
+.app-notice { padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
+.modal h4 { margin: 8px 0; }
+.modal button, .modal input:not([type=checkbox]), .modal select { min-height: 44px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [role=button]:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
+
 .more-tabs {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
