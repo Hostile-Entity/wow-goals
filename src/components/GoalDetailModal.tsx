@@ -39,6 +39,7 @@ export function GoalDetailModal({
   return (
     <Dialog
       title={goal.title}
+      className="entity-detail"
       close={close}
       dirty={dirty}
       busy={action.pending || app.busy}

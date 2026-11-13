@@ -853,6 +853,60 @@ test("phone editor keeps stacked fields, a separate reachable Save bar, and no h
   expect((await records(page, "tasks")).find(t => t.title === "Created from small phone").projectId).toBe("project-a");
 });
 
+test("project and goal detail popups use the full-height editor layout", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await seed(page);
+  await tab(page, "Projects").click();
+  await page.locator("#item-project-project-a").getByRole("button", { name: "Open", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  for (const type of ["project", "goal"]) {
+    if (type === "goal") {
+      await tab(page, "More").click();
+      await page.getByRole("button", { name: "Goals", exact: true }).click();
+      await page.locator("#item-goal-goal-a").getByRole("button", { name: "Open", exact: true }).click();
+    }
+    for (const height of [780, 420]) {
+      await page.setViewportSize({ width: 390, height });
+      await expect.poll(() => dialog.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(height);
+      await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeInViewport({ ratio: 1 });
+      expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    }
+    await dialog.getByRole("button", { name: `Edit ${type}`, exact: true }).click();
+    await expect(dialog).toHaveAccessibleName(`Edit ${type}`);
+    await expect(dialog.getByRole("button", { name: "Save", exact: true })).toBeInViewport({ ratio: 1 });
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  }
+});
+
+test("note description grows with the viewport while title and actions stay visible", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 780 });
+  await seed(page);
+  await tab(page, "Notes").click();
+  await page.locator("#item-note-note-a").getByRole("button", { name: "Edit", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit note", exact: true });
+  const description = editor.getByRole("textbox", { name: "Description", exact: true });
+  const heights: number[] = [];
+  for (const height of [780, 980]) {
+    await page.setViewportSize({ width: 390, height });
+    await expect.poll(() => editor.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(height);
+    await expect(description).toBeInViewport({ ratio: 1 });
+    await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toBeInViewport({ ratio: 1 });
+    for (const name of ["Task", "Project", "Other types", "Copy text", "Discard", "Delete", "Save"]) {
+      await expect(editor.getByRole("button", { name, exact: true })).toBeInViewport({ ratio: 1 });
+    }
+    heights.push((await description.boundingBox())!.height);
+    expect(await editor.locator(".modal-body").evaluate(el => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+  }
+  expect(heights[0]).toBeGreaterThan(96);
+  expect(heights[1] - heights[0]).toBeCloseTo(200, 0);
+  await editor.getByRole("button", { name: "Other types", exact: true }).click();
+  await expect(editor.getByRole("button", { name: "Routine", exact: true })).toBeInViewport({ ratio: 1 });
+  await page.setViewportSize({ width: 320, height: 420 });
+  await expect(editor.getByRole("button", { name: "Save", exact: true })).toBeInViewport({ ratio: 1 });
+  await editor.getByRole("button", { name: "Delete", exact: true }).scrollIntoViewIfNeeded();
+  await expect(editor.getByRole("button", { name: "Delete", exact: true })).toBeInViewport({ ratio: 1 });
+});
+
 test("visible Discard and Delete require confirmation and cancellation preserves the item", async ({ page }) => {
   await seed(page);
   await tab(page, "Notes").click();

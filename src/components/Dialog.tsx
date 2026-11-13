@@ -32,7 +32,7 @@ export function Dialog({
       if (!dialog) return;
       dialog.style.setProperty("--dialog-height", `${viewport?.height ?? window.innerHeight}px`);
       dialog.style.setProperty("--dialog-top", `${viewport?.offsetTop ?? 0}px`);
-      if (dialog.classList.contains("entity-editor") && dialog.contains(document.activeElement)) {
+      if (dialog.matches(".entity-editor, .entity-detail") && dialog.contains(document.activeElement)) {
         requestAnimationFrame(() => (document.activeElement as HTMLElement | null)?.scrollIntoView({ block: "nearest" }));
       }
     };

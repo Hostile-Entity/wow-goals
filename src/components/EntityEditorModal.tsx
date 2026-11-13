@@ -176,7 +176,7 @@ export function EntityEditorModal({
       close={close}
       dirty={dirty}
       busy={action.pending || app.busy}
-      className="entity-editor"
+      className={`entity-editor${type === "note" ? " note-editor" : ""}`}
       footer={
         <button type="submit" form="entity-editor-form" className="button-primary" disabled={!title.trim() || action.pending || app.busy}>
           {action.pending ? "Saving…" : "Save"}
@@ -211,7 +211,7 @@ export function EntityEditorModal({
               />
             </label>
           )}
-          <label className="inline-select">
+          <label className="inline-select editor-description">
             <span className="field-label">
               {type === "project" ? "TODO source" : "Description"}
             </span>

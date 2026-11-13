@@ -115,6 +115,7 @@ export function ProjectDetailModal({
   return (
     <Dialog
       title={project.title}
+      className="entity-detail"
       close={close}
       dirty={Boolean(text || editing !== null)}
       busy={action.pending || app.busy}

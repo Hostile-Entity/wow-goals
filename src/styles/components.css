@@ -204,7 +204,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 
 .modal-body { display: grid; gap: 14px; min-width: 0; }
 /* Full-height, one-scroll editor. Header/footer never cover editable content. */
-dialog.entity-editor {
+dialog:is(.entity-editor, .entity-detail) {
   position: fixed;
   inset: var(--dialog-top, 0px) 0 auto;
   width: min(620px, 100%);
@@ -220,15 +220,15 @@ dialog.entity-editor {
   overflow: hidden;
   gap: 0;
 }
-.entity-editor > .card-top {
+:is(.entity-editor, .entity-detail) > .card-top {
   position: static;
   flex: 0 0 auto;
   align-items: center;
   padding: max(8px, env(safe-area-inset-top)) 16px 8px;
   border-bottom: 1px solid var(--line);
 }
-.entity-editor > .card-top h3 { margin: 0; font-size: 1.15rem; line-height: 1.4; }
-.entity-editor > .modal-body {
+:is(.entity-editor, .entity-detail) > .card-top h3 { margin: 0; font-size: 1.15rem; line-height: 1.4; }
+:is(.entity-editor, .entity-detail) > .modal-body {
   display: block;
   flex: 1 1 auto;
   min-height: 0;
@@ -237,7 +237,7 @@ dialog.entity-editor {
   scroll-padding: 16px;
   padding: 16px;
 }
-.entity-editor > .modal-body > * + * { margin-top: 16px; }
+:is(.entity-editor, .entity-detail) > .modal-body > * + * { margin-top: 16px; }
 .entity-editor > .modal-footer {
   flex: 0 0 auto;
   padding: 8px 16px max(8px, env(safe-area-inset-bottom));
