@@ -1,13 +1,23 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#0e1419" />
+    <meta name="theme-color" content="#f5f7f6" />
+    <style>:root{--lightningcss-light:initial;--lightningcss-dark: ;color-scheme:light;background:#f5f7f6}:root[data-theme=wow]{--lightningcss-light: ;--lightningcss-dark:initial;color-scheme:dark;background:#05070b}</style>
+    <script>
+      // Restore the last loaded theme before CSS, React, or IndexedDB is ready.
+      try {
+        if (localStorage.getItem("wowgoals-theme") === "wow") {
+          document.documentElement.dataset.theme = "wow";
+          document.querySelector('meta[name="theme-color"]').content = "#05070b";
+        }
+      } catch { /* Startup must also work when storage is unavailable. */ }
+    </script>
     <link rel="manifest" href="manifest.webmanifest" />
     <title>WowGoals</title>
-    <script type="module" crossorigin src="/wow-goals/assets/index-DTflWEEz.js"></script>
-    <link rel="stylesheet" crossorigin href="/wow-goals/assets/index-BcprHNfO.css">
+    <script type="module" crossorigin src="/wow-goals/assets/index-Do7cepg_.js"></script>
+    <link rel="stylesheet" crossorigin href="/wow-goals/assets/index-D1N2Ffm2.css">
   </head>
   <body>
     <div id="root"></div>
