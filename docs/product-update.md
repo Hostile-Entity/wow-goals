@@ -1,5 +1,7 @@
 # Product update and single-user transition
 
+Historical schema-2 release notes. For the current one-time schema-5 upgrade, see [status update and migration safety](status-update.md).
+
 Implements the choices exported on 12 November 2026 in the local decision workbook. The application remains a local-only, single-user PWA; there are no accounts, cloud services, notifications, parallel old/new models, or sync infrastructure.
 
 ## Implemented choices

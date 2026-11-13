@@ -136,7 +136,7 @@ mark {
   box-shadow: 0 0 0 1px rgba(200, 155, 60, 0.2), 0 0 12px rgba(0, 0, 0, 0.9) inset, var(--wow-shadow-strong);
   padding: 10px;
   display: grid;
-  gap: 10px;
+  gap: var(--space-section);
 }
 
 dialog.modal { color: var(--text); margin: auto; }
@@ -145,7 +145,8 @@ dialog.modal::backdrop { background: rgba(3, 6, 9, .86); }
 .editor-fields { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 12px; }
 .action-error { color: var(--danger); padding: 10px; border: 1px solid currentColor; border-radius: 8px; overflow-wrap: anywhere; }
 .app-notice { padding: 10px; border: 1px solid var(--line); border-radius: 8px; }
-.modal h4 { margin: 8px 0; }
+.modal h4 { margin: var(--space-heading) 0; }
+.modal-body section > :is(h3, h4, p):first-child { margin-top: 0; }
 .modal button { min-height: var(--button-height); }
 .modal input:not([type=checkbox]), .modal select { min-height: 44px; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [role=button]:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
@@ -154,7 +155,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  margin-top: 0;
+  margin-block: var(--space-section);
 }
 
 .settings-volume-row {
@@ -183,26 +184,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .settings-btn, .filter-btn, .filter-menu button { font-size: .85rem; }
 .meta { font-size: .85rem; }
 .filter-menu { min-width: 160px; }
-.modal { width: min(620px, calc(100% - 28px)); padding: 22px; max-height: 90dvh; }
-.modal > .card-top { position: sticky; top: -22px; background: var(--panel); z-index: 3; padding: 12px 0; }
-.modal > .card-top h3 { font-size: 1.2rem; }
-.entity-metadata { padding: 12px 0; color: var(--muted); font-size: .85rem; }
+.modal { width: min(620px, calc(100% - 28px)); padding: var(--space-dialog-inset); max-height: 90dvh; }
+.modal > .card-top { position: sticky; top: calc(-1 * var(--space-dialog-inset)); background: var(--panel); z-index: 3; padding: var(--space-heading) 0; }
+.modal > .card-top h3 { font-size: 1.2rem; margin: 0; }
+.entity-metadata { padding: 0; color: var(--muted); font-size: .85rem; }
 .entity-metadata summary { cursor: pointer; }
-.conversion-notice { padding: 12px 16px; border-radius: 10px; background: var(--button-bg-active); border: 1px solid var(--line); }
-.conversion-notice p { margin: 0 0 10px; font-size: .85rem; }
-.copy-note { margin: 12px 0; }
+.conversion-notice { padding: var(--space-card-block) var(--space-card-inline); border-radius: 10px; background: var(--button-bg-active); border: 1px solid var(--line); }
+.conversion-notice p { margin: 0 0 var(--space-heading); font-size: .85rem; }
+.copy-note { margin: 0; display: grid; gap: var(--space-heading); justify-items: start; }
+.copy-note .meta { margin: 0; }
 :root[data-theme="light"] .topbar { border-color: var(--line); box-shadow: none; }
 :root[data-theme="light"] .filter-menu { background: var(--panel); border-color: var(--line); box-shadow: 0 8px 30px #20332a12; }
 :root[data-theme="light"] dialog.modal { border-color: var(--line); box-shadow: 0 24px 80px #20332a24; }
 :root[data-theme="light"] dialog.modal::backdrop { background: #16281e66; backdrop-filter: blur(3px); }
 :root[data-theme="light"] .meta { color: var(--muted); }
 @media (max-width: 500px) {
-  .modal { padding: 16px; }
-  .modal > .card-top { top: -16px; }
   .topbar { padding: 8px 14px; }
 }
 
-.modal-body { display: grid; gap: 14px; min-width: 0; }
+.modal-body { display: grid; gap: var(--space-section); min-width: 0; }
+.modal-body > p { margin: 0; }
 /* Full-height, one-scroll editor. Header/footer never cover editable content. */
 dialog:is(.entity-editor, .entity-detail) {
   position: fixed;
@@ -224,7 +225,7 @@ dialog:is(.entity-editor, .entity-detail) {
   position: static;
   flex: 0 0 auto;
   align-items: center;
-  padding: max(8px, env(safe-area-inset-top)) 16px 8px;
+  padding: max(8px, env(safe-area-inset-top)) var(--space-dialog-inset) 8px;
   border-bottom: 1px solid var(--line);
 }
 :is(.entity-editor, .entity-detail) > .card-top h3 { margin: 0; font-size: 1.15rem; line-height: 1.4; }
@@ -234,13 +235,15 @@ dialog:is(.entity-editor, .entity-detail) {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  scroll-padding: 16px;
-  padding: 16px;
+  scroll-padding: var(--space-dialog-inset);
+  padding: var(--space-dialog-inset);
+  gap: 0;
 }
-:is(.entity-editor, .entity-detail) > .modal-body > * + * { margin-top: 16px; }
+:is(.entity-editor, .entity-detail) > .modal-body > * { margin: 0; }
+:is(.entity-editor, .entity-detail) > .modal-body > * + * { margin-top: var(--space-section); }
 .entity-editor > .modal-footer {
   flex: 0 0 auto;
-  padding: 8px 16px max(8px, env(safe-area-inset-bottom));
+  padding: 8px var(--space-dialog-inset) max(8px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--line);
   background: var(--panel);
 }
@@ -253,3 +256,85 @@ dialog:is(.entity-editor, .entity-detail) {
   padding: 10px 12px;
 }
 .entity-editor input[type=date] { display: block; width: 100%; }
+.expandable-description {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.description-viewport {
+  max-height: 15em; /* Ten rendered lines at 1.5 line-height. */
+  overflow: hidden;
+}
+
+.description-viewport.is-expanded {
+  max-height: none;
+}
+
+.description-content {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.description-toggle {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 4px;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font-size: .8rem;
+  color: var(--description-toggle-color, var(--wow-text-muted));
+  text-align: center;
+}
+
+:root[data-theme] button.description-toggle:hover {
+  background: none;
+  color: var(--description-toggle-color, var(--wow-text-muted));
+  box-shadow: none;
+  transform: none;
+}
+
+.description-toggle:focus-visible {
+  outline: 2px solid var(--muted);
+  outline-offset: 2px;
+}
+
+.note-markdown {
+  white-space: normal;
+}
+
+.note-markdown :is(p, ul, ol, pre, blockquote) {
+  margin: 0;
+}
+
+.note-markdown :is(p, li) {
+  white-space: pre-wrap;
+}
+
+.note-markdown :is(ul, ol) {
+  padding-inline-start: 1.5em;
+}
+
+.note-markdown blockquote {
+  border-inline-start: 2px solid var(--line);
+  padding-inline-start: .75em;
+}
+
+.note-markdown a {
+  color: var(--accent-2);
+  text-decoration: underline;
+}
+
+.note-markdown code {
+  font-family: ui-monospace, monospace;
+  font-size: .95em;
+  background: var(--panel-alt);
+}
+
+.note-markdown pre {
+  white-space: pre-wrap;
+}

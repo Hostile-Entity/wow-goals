@@ -1,5 +1,7 @@
 # Interface update
 
+Historical schema-4 release notes. The current status changes and one-time upgrade are documented in [status update and migration safety](status-update.md).
+
 Decisions: `tmp/wowgoals-ux-review/wowgoals-interface-decisions.json`, alongside the HTML review (local, ignored by Git).
 
 ## Applied decisions

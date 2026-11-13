@@ -3,6 +3,8 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { AppData, getStatusBucket } from "../state/useAppData";
 import { Note } from "../types";
 import { ItemTimestamp } from "../components/ItemTimestamp";
+import { ExpandableDescription } from "../components/ExpandableDescription";
+import { NoteMarkdown } from "../components/NoteMarkdown";
 
 interface NotesTabProps {
   filteredNotes: AppData["filteredNotes"];
@@ -45,7 +47,9 @@ const NoteCard = memo(function NoteCard({
         <div className="note-main">
           <div className="title note-title">{note.title}</div>
           {note.description ? (
-            <div className="note-description">{note.description}</div>
+            <ExpandableDescription className="note-description">
+              <NoteMarkdown text={note.description} />
+            </ExpandableDescription>
           ) : null}
         </div>
         <div className="note-side">

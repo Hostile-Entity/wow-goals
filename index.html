@@ -1,9 +1,22 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#0e1419" />
+    <meta name="theme-color" content="#f5f7f6" />
+    <style>
+      :root { background: #f5f7f6; color-scheme: light; }
+      :root[data-theme="wow"] { background: #05070b; color-scheme: dark; }
+    </style>
+    <script>
+      // Restore the last loaded theme before CSS, React, or IndexedDB is ready.
+      try {
+        if (localStorage.getItem("wowgoals-theme") === "wow") {
+          document.documentElement.dataset.theme = "wow";
+          document.querySelector('meta[name="theme-color"]').content = "#05070b";
+        }
+      } catch { /* Startup must also work when storage is unavailable. */ }
+    </script>
     <link rel="manifest" href="manifest.webmanifest" />
     <title>WowGoals</title>
   </head>

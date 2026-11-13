@@ -53,7 +53,7 @@ export function historicalRows<T extends Project | Routine>(
       } catch {
         /* Older delete events did not include metadata. */
       }
-      rows.push({ id, title, createdAt, status: "discarded" });
+      rows.push({ id, title, createdAt, status: "archived" });
     }
   return rows;
 }

@@ -1,6 +1,6 @@
 import { BaseEntity, EntityType } from "../types";
 import { AppData } from "../state/useAppData";
-import { lifecycle, statusLabel } from "../state/lifecycle";
+import { lifecycle, statusActionLabel } from "../state/lifecycle";
 import { useAction } from "./useAction";
 
 export function EntityActions({
@@ -13,7 +13,7 @@ export function EntityActions({
   entity: BaseEntity;
   app: Pick<
     AppData,
-    "setStatus" | "discardEntity" | "recoverEntity" | "permanentDelete"
+    "setStatus" | "permanentDelete" | "completeRoutine" | "isRoutineCompletedToday"
   >;
   beforeAction?: () => boolean;
 }) {
@@ -27,43 +27,30 @@ export function EntityActions({
         className="actions lifecycle-actions"
         aria-label={`${type} lifecycle`}
       >
-        {entity.status !== "discarded" &&
-          lifecycle[type]
-            .filter(
-              (status) =>
-                status !== entity.status &&
-                !(type === "task" && status === "done"),
-            )
-            .map((status) => (
-              <button
-                key={status}
-                disabled={action.pending}
-                onClick={() =>
-                  run(() => app.setStatus(type, entity.id, status))
-                }
-              >
-                {status === "done"
-                  ? "Complete project"
-                  : status === "achieved"
-                    ? "Achieve goal"
-                    : entity.status === "done" || entity.status === "achieved"
-                       ? `Reopen as ${statusLabel(status)}`
-                       : `Mark ${statusLabel(status)}`}
-              </button>
-            ))}
-        {entity.status === "discarded" ? (
+        {lifecycle[type]
+          .filter(
+            (status) =>
+              status !== entity.status &&
+              !(type === "task" && status === "done") &&
+              !(entity.status === "archived" && ["done", "achieved"].includes(status)),
+          )
+          .map((status) => (
+            <button
+              key={status}
+              disabled={action.pending}
+              onClick={() =>
+                run(() => app.setStatus(type, entity.id, status))
+              }
+            >
+              {statusActionLabel(type, entity.status, status)}
+            </button>
+          ))}
+        {type === "routine" && entity.status === "enabled" && (
           <button
             disabled={action.pending}
-            onClick={() => run(() => app.recoverEntity(type, entity.id))}
+            onClick={() => run(() => app.completeRoutine(entity.id))}
           >
-            Recover
-          </button>
-        ) : (
-          <button
-            disabled={action.pending}
-            onClick={() => run(() => app.discardEntity(type, entity.id))}
-          >
-            Discard
+            {app.isRoutineCompletedToday(entity.id) ? "Undo today's completion" : "Done today"}
           </button>
         )}
         <button

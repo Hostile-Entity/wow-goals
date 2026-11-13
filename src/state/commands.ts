@@ -60,7 +60,7 @@ export function updateCommand(
   const current = findEntity(records, type, id);
   const updated = { ...mutator(structuredClone(current)), updatedAt: nowIso() };
   if (
-    ![...lifecycle[type], "discarded"].includes(updated.status) ||
+    !lifecycle[type].includes(updated.status) ||
     !updated.title.trim()
   )
     throw new Error("Invalid item title or status.");
@@ -117,8 +117,8 @@ export function completeTaskCommand(
 ): Change[] {
   const task = findEntity(records, "task", id) as Task;
   if (task.status === "done") return [];
-  if (task.status === "discarded")
-    throw new Error("Recover this task before completing it.");
+  if (!["open", "doing"].includes(task.status))
+    throw new Error("Unarchive this task before completing it.");
   return [
     { store: "tasks", row: { ...task, status: "done", updatedAt: nowIso() } },
     {
@@ -195,7 +195,7 @@ export function triageCommand(
         triagedTo: to,
         triagedId: destination.id,
         triagePreviousStatus: note.status,
-        status: "processed",
+        status: "archived",
         updatedAt: nowIso(),
       },
     },

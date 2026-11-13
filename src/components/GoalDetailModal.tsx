@@ -45,7 +45,7 @@ export function GoalDetailModal({
       busy={action.pending || app.busy}
     >
       <ConversionNotice context={conversion} beforeAction={guard} />
-      <p className="entity-description">{goal.description}</p>
+      {goal.description && <p className="entity-description">{goal.description}</p>}
       <div className="actions">
         <button
           onClick={() => {

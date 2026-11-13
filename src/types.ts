@@ -3,15 +3,17 @@ export type EntityType = "note" | "task" | "project" | "goal" | "routine";
 export type ItemStatus =
   | "inbox"
   | "reference"
-  | "processed"
   | "open"
   | "doing"
   | "done"
   | "planned"
   | "active"
-  | "paused"
   | "enabled"
   | "achieved"
+  | "archived"
+  // Legacy values are read only during migration; current lifecycles exclude them.
+  | "processed"
+  | "paused"
   | "discarded";
 
 export interface BaseEntity {

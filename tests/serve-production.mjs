@@ -54,4 +54,4 @@ createServer(async (request, response) => {
     response.writeHead(404);
     response.end();
   }
-}).listen(4173, "127.0.0.1");
+}).listen(Number(process.env.PORT ?? 4173), "127.0.0.1");

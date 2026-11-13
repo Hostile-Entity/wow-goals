@@ -29,8 +29,8 @@ export function TodayTab({
               ? formatDueLabel(task.deadline, app.logicalDay)
               : ""}
             {task.scheduledFor ? ` · planned for ${task.scheduledFor}` : ""}
-            {project && ["paused", "done", "discarded"].includes(project.status)
-              ? ` · project ${project.status}`
+            {project && ["archived", "done"].includes(project.status)
+              ? ` · project ${app.statusLabel(project).toLowerCase()}`
               : ""}
           </div>
         </div>

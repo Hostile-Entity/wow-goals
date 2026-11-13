@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
   Change,
@@ -46,19 +46,21 @@ import {
   defaultFilters,
   entityStores,
   FilterKey,
-  filterOptions,
   getStatusBucket,
-  initialStatus,
   isOpen,
   isUnfinished,
   sortItems,
   sortTasks,
+  sortRoutines,
+  routineCompletedToday,
+  savedStatusFilter,
   StatusFilter,
   statusLabel,
 } from "./lifecycle";
 import { projectTodos } from "./projectTodos";
 import { useDeviceUI } from "./useDeviceUI";
 import { usePwa } from "./usePwa";
+import { applyTheme } from "./theme";
 
 export { getStatusBucket };
 export type { FilterKey, StatusFilter };
@@ -123,9 +125,7 @@ function savedFilters(): Record<FilterKey, StatusFilter> {
     return Object.fromEntries(
       Object.entries(defaultFilters).map(([key, value]) => [
         key,
-        filterOptions(key as FilterKey).includes(saved[key])
-          ? saved[key]
-          : value,
+        savedStatusFilter(key as FilterKey, saved[key] ?? value),
       ]),
     ) as Record<FilterKey, StatusFilter>;
   } catch {
@@ -188,6 +188,11 @@ export function useAppData() {
     noteComposerRef,
   );
   const pwa = usePwa();
+
+  useLayoutEffect(() => {
+    // Do not overwrite the boot theme with default settings while data loads.
+    if (loaded) applyTheme(theme);
+  }, [loaded, theme]);
 
   async function reloadAll() {
     try {
@@ -378,10 +383,16 @@ export function useAppData() {
     return destination.row.id;
   }
   async function undoTriage(id: string) {
-    await mutate(
+    const changes = await mutate(
       ["notes", "tasks", "projects", "goals", "routines", "completions"],
       (records) => undoTriageCommand(records, id, logicalDay),
     );
+    const restored = changes.find(change => change.store === "notes" && "row" in change);
+    if (restored && "row" in restored && "status" in restored.row) {
+      const status = restored.row.status;
+      setReveal(null);
+      setFilters(current => ({ ...current, notes: status }));
+    }
     notify("Conversion undone. Your edited note was kept.");
   }
   async function completeTask(id: string) {
@@ -501,12 +512,6 @@ export function useAppData() {
         : {}),
     }));
   }
-  async function discardEntity(type: EntityType, id: string) {
-    if (!window.confirm(`Move this ${type} to Trash? You can recover it later.`)) return;
-    await updateEntity(type, id, row => ({ ...row, status: "discarded" }));
-  }
-  const recoverEntity = (type: EntityType, id: string) =>
-    updateEntity(type, id, (row) => ({ ...row, status: initialStatus[type] }));
   async function permanentDelete(type: EntityType, id: string) {
     if (
       !window.confirm(
@@ -533,6 +538,14 @@ export function useAppData() {
             occurredDay: logicalDay,
           }),
         ];
+        if (type === "task" && records.settings[0].focusTaskIds.includes(id))
+          changes.push({
+            store: "settings",
+            row: {
+              ...records.settings[0],
+              focusTaskIds: records.settings[0].focusTaskIds.filter(taskId => taskId !== id),
+            },
+          });
         for (const key of ["tasks", "projects", "routines"] as const)
           for (const row of records[key])
             if (
@@ -570,7 +583,9 @@ export function useAppData() {
     )
       return;
     await mutate(["completions", "routines"], (records) => {
-      findEntity(records, "routine", id);
+      const routine = findEntity(records, "routine", id);
+      if (fromToday && routine.status !== "enabled")
+        throw new Error("Unarchive this routine before completing it.");
       const matches = records.completions.filter(
         (c) =>
           c.entityType === "routine" && c.entityId === id && c.date === day,
@@ -676,7 +691,7 @@ export function useAppData() {
     download(backupPayload(data), `wow-goals-backup-${logicalDay}.json`);
     await setSettings({ lastBackupAt: nowIso() });
   }
-  async function exportSafetySnapshot(which: "pre-v2" | "pre-v3" | "pre-v4" | "pre-import") {
+  async function exportSafetySnapshot(which: "pre-v2" | "pre-v3" | "pre-v4" | "pre-v5" | "pre-import") {
     const saved = await getById("meta", which);
     if (!saved?.data) {
       throw new Error("No safety snapshot exists yet.");
@@ -738,7 +753,7 @@ export function useAppData() {
   const eligibleTasks = activeTasks.filter(
     (task) =>
       !task.projectId ||
-      !["paused", "done", "discarded"].includes(
+      !["archived", "done"].includes(
         state.projects.find((project) => project.id === task.projectId)
           ?.status ?? "",
       ),
@@ -825,8 +840,8 @@ export function useAppData() {
       [state.goals, effectiveFilters.goals],
     ),
     filteredRoutines: useMemo(
-      () => sortItems(state.routines, effectiveFilters.routines),
-      [state.routines, effectiveFilters.routines],
+      () => sortRoutines(state.routines, state.completions, effectiveFilters.routines, logicalDay),
+      [state.routines, state.completions, effectiveFilters.routines, logicalDay],
     ),
     linkableGoals: state.goals.filter(isOpen),
     linkableProjects: state.projects.filter(isOpen),
@@ -847,7 +862,10 @@ export function useAppData() {
         !settings.focusTaskIds.includes(task.id) &&
         (!task.scheduledFor || task.scheduledFor <= logicalDay),
     ),
-    statusLabel: (row: Pick<BaseEntity, "status">) => statusLabel(row.status),
+    statusLabel: (row: Pick<BaseEntity, "status" | "id">) =>
+      row.status === "enabled" && routineCompletedToday(state.completions, row.id, logicalDay)
+        ? "Completed" : statusLabel(row.status),
+    isRoutineCompletedToday: (id: string) => routineCompletedToday(state.completions, id, logicalDay),
     addNote,
     updateEntity,
     createTask,
@@ -862,8 +880,6 @@ export function useAppData() {
     completeRoutine,
     toggleRoutineCompletionForDay,
     setStatus,
-    discardEntity,
-    recoverEntity,
     permanentDelete,
     toggleProjectTodo,
     editProjectTodo,

@@ -1,6 +1,7 @@
 import { AppStateData, EntityType } from "../types";
 import { entityStores, lifecycle } from "../state/lifecycle";
 import { dataStores, DB_VERSION, migrateV1, migrateV2 } from "./schema";
+import { legacyLifecycle, migrateStatuses } from "./statuses";
 
 export const backupPayload = (data: AppStateData) => ({
   app: "wow-goals" as const,
@@ -26,7 +27,7 @@ export function parseBackup(raw: unknown): AppStateData {
   if (
     !object(raw) ||
     raw.app !== "wow-goals" ||
-    ![1, 2, 3, DB_VERSION].includes(raw.schemaVersion) ||
+    ![1, 2, 3, 4, DB_VERSION].includes(raw.schemaVersion) ||
     !object(raw.data)
   )
     fail("wrong app or unsupported schema");
@@ -51,7 +52,9 @@ export function parseBackup(raw: unknown): AppStateData {
       const statuses =
         raw.schemaVersion === 1
           ? ["active", "in_progress", "completed", "discarded"]
-          : [...lifecycle[type], "discarded"];
+          : raw.schemaVersion < 5
+            ? [...legacyLifecycle[type], "discarded"]
+            : lifecycle[type];
       if (!statuses.includes(row.status)) fail(`${type} has invalid status`);
       if (row.deadline !== undefined && !day(row.deadline))
         fail("invalid deadline");
@@ -72,7 +75,9 @@ export function parseBackup(raw: unknown): AppStateData {
       fail("invalid conversion reference");
     if (
       note.triagePreviousStatus !== undefined &&
-      ![...lifecycle.note, "discarded"].includes(note.triagePreviousStatus)
+      !(raw.schemaVersion < 5
+        ? [...legacyLifecycle.note, "discarded"]
+        : lifecycle.note).includes(note.triagePreviousStatus)
     )
       fail("invalid conversion provenance");
   }
@@ -175,11 +180,12 @@ export function parseBackup(raw: unknown): AppStateData {
         fail("invalid project reference");
     }
   // Dangling legacy references can result from permanent deletion. Preserve and report them, never erase their records.
-  return raw.schemaVersion === 1
+  const upgraded = raw.schemaVersion === 1
     ? migrateV1(data as AppStateData)
     : raw.schemaVersion === 2 || raw.schemaVersion === 3
       ? migrateV2(data as AppStateData)
       : (structuredClone(data) as AppStateData);
+  return raw.schemaVersion < 5 ? migrateStatuses(upgraded) : upgraded;
 }
 
 export function danglingReferences(data: AppStateData): number {

@@ -1,38 +1,16 @@
 import { test, expect, Page } from "@playwright/test";
 import { legacyFixture } from "../fixtures/legacy";
-import { migrateV1 } from "../../src/db/schema";
+import { DB_VERSION, migrateV1 } from "../../src/db/schema";
+import { migrateStatuses } from "../../src/db/statuses";
 import { AppStateData } from "../../src/types";
+import { records, seedDatabase, tab } from "./helpers";
 
-const tab = (page: Page, name: string) =>
-  page.getByRole("navigation").getByRole("button", { name, exact: true });
 function canonical<T>(data: T): T {
   const copy = structuredClone(data) as any;
   if (Array.isArray(copy)) copy.sort((a, b) => a.id.localeCompare(b.id));
   for (const value of Object.values(copy))
     if (Array.isArray(value)) value.sort((a, b) => a.id.localeCompare(b.id));
   return copy;
-}
-async function seedDatabase(page: Page) {
-  await page.goto("icons/icon.svg");
-  await page.evaluate(async (data) => {
-    await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("wow-goals-db", 1);
-      request.onupgradeneeded = () => {
-        for (const [name, values] of Object.entries(data)) {
-          const store = request.result.createObjectStore(name, {
-            keyPath: "id",
-          });
-          for (const row of Array.isArray(values) ? values : [values])
-            store.put(row);
-        }
-      };
-      request.onsuccess = () => {
-        request.result.close();
-        resolve();
-      };
-      request.onerror = () => reject(request.error);
-    });
-  }, legacyFixture());
 }
 async function seed(page: Page) {
   await seedDatabase(page);
@@ -41,26 +19,301 @@ async function seed(page: Page) {
     page.getByRole("heading", { name: "Today", exact: true }),
   ).toBeVisible();
 }
-async function records(page: Page, store: string) {
-  return page.evaluate(
-    async (store) =>
-      new Promise<any[]>((resolve) => {
-        const r = indexedDB.open("wow-goals-db");
-        r.onsuccess = () => {
-          const db = r.result;
-          const q = db.transaction(store).objectStore(store).getAll();
-          q.onsuccess = () => {
-            resolve(q.result);
-            db.close();
-          };
-        };
-      }),
-    store,
-  );
-}
 test.beforeEach(async ({ request }) => {
-  await request.post("http://127.0.0.1:4173/__test/reset");
+  await request.post("/__test/reset");
 });
+
+for (const theme of ["light", "wow"] as const) {
+  test(`quiet startup restores ${theme} before JavaScript and keeps database errors visible`, async ({ page }) => {
+    await page.addInitScript((theme) => {
+      localStorage.setItem("wowgoals-theme", theme);
+      // Keep React in its initial data-loading state until the test releases it.
+      const open = indexedDB.open.bind(indexedDB);
+      let pending: any;
+      Object.defineProperty(indexedDB, "open", {
+        value: () => (pending = {}),
+        configurable: true,
+      });
+      (window as any).__failOpeningData = () => {
+        pending.error = new DOMException("Test database unavailable", "UnknownError");
+        pending.onerror();
+      };
+      (window as any).__restoreOpeningData = () => {
+        Object.defineProperty(indexedDB, "open", { value: open, configurable: true });
+      };
+    }, theme);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    await page.route("**/assets/*.js", async (route) => {
+      await gate;
+      await route.continue();
+    });
+    await page.goto("./", { waitUntil: "commit" });
+    try {
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      await expect(page.locator("html")).toHaveCSS("background-color", theme === "wow" ? "rgb(5, 7, 11)" : "rgb(245, 247, 246)");
+      await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute("content", theme === "wow" ? "#05070b" : "#f5f7f6");
+    } finally {
+      release();
+    }
+    await expect(page.locator(".loading")).toBeVisible();
+    await expect(page.locator(".loading")).toHaveText("");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+
+    // Blocked and failed opens must both remain visible on the quiet screen.
+    await page.evaluate(() => window.dispatchEvent(new Event("wowgoals-db-blocked")));
+    await expect(page.getByRole("alert")).toContainText("Close the other WowGoals");
+    await page.evaluate(() => (window as any).__failOpeningData());
+    await expect(page.getByRole("alert")).toContainText("Test database unavailable");
+    await expect(page.getByRole("alert")).toContainText("Your local data has not been reset");
+    await page.evaluate(() => (window as any).__restoreOpeningData());
+    await page.getByRole("button", { name: "Retry opening data" }).click();
+    await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+    // Actual database settings win over a stale startup cache.
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    expect(await page.evaluate(() => localStorage.getItem("wowgoals-theme"))).toBe("light");
+    await page.getByRole("button", { name: "Open app settings" }).click();
+    await page.getByRole("button", { name: "WOW", exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "wow");
+    expect(await page.evaluate(() => localStorage.getItem("wowgoals-theme"))).toBe("wow");
+  });
+}
+
+test("notes render safe Markdown, expand to full text, and remeasure virtual rows", async ({ page }) => {
+  const data = legacyFixture();
+  const description = [
+    "**Bold** and *italic* with `inline code`",
+    "- First bullet",
+    "- Second bullet",
+    "",
+    "1. First numbered",
+    "2. Second numbered",
+    "",
+    "[Safe link](https://example.com)",
+    ...Array.from({ length: 12 }, (_, index) => `Extra line ${index + 1}`),
+    '[Unsafe link](javascript:alert(1))',
+    '<img src=x onerror="window.__unsafeMarkdown = true">',
+  ].join("\n");
+  data.notes[0].description = description;
+  data.notes.push({ ...data.notes[0], id: "note-next", title: "Next note", description: "Short description" });
+  await seedDatabase(page, data);
+  await page.goto("./");
+  await tab(page, "Notes").click();
+  const card = page.locator("#item-note-note-a");
+  await expect(card.locator("strong")).toHaveText("Bold");
+  await expect(card.locator("em")).toHaveText("italic");
+  await expect(card.locator("code")).toHaveText("inline code");
+  await expect(card.locator("ul > li")).toHaveCount(2);
+  await expect(card.locator("ol > li")).toHaveCount(2);
+  await expect(card.getByRole("link", { name: "Safe link", exact: true })).toHaveAttribute("href", "https://example.com");
+  await expect(card.locator("img, script, [onerror], a[href^='javascript:']")).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).__unsafeMarkdown)).toBeUndefined();
+  const viewport = card.locator(".description-viewport");
+  const previewHeight = await viewport.evaluate((element) => element.getBoundingClientRect().height);
+  const lineHeight = await viewport.evaluate((element) => Number.parseFloat(getComputedStyle(element).lineHeight));
+  expect(Math.abs(previewHeight - lineHeight * 10)).toBeLessThan(1);
+  await card.getByRole("button", { name: "Show more", exact: true }).click();
+  await expect(card.getByRole("button", { name: "Show less", exact: true })).toHaveAttribute("aria-expanded", "true");
+  expect(await viewport.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThan(previewHeight);
+  await expect.poll(() => page.evaluate(() => {
+    const first = document.querySelector("#item-note-note-a")!.getBoundingClientRect();
+    const next = document.querySelector("#item-note-note-next")!.getBoundingClientRect();
+    return next.top - first.bottom;
+  })).toBeGreaterThanOrEqual(0);
+  await card.getByRole("button", { name: "Show less", exact: true }).click();
+  await expect(card.getByRole("button", { name: "Show more", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#item-note-note-next").getByRole("button", { name: "Show more" })).toHaveCount(0);
+  await card.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Description", exact: true })).toHaveValue(description);
+  await expect(page.getByText(/Markdown: \*\*bold\*\*/)).toBeVisible();
+  expect((await records(page, "notes")).find((note) => note.id === "note-a").description).toBe(description);
+});
+
+test("task previews count descriptions only, preserve ten lines, and adapt to wrapping", async ({ page }) => {
+  const data = legacyFixture();
+  data.tasks[0].description = Array.from({ length: 11 }, (_, index) => `Task line ${index + 1}`).join("\n");
+  data.tasks[1].title = "A very long title ".repeat(40);
+  data.tasks[1].status = "active";
+  data.tasks[1].description = Array.from({ length: 10 }, (_, index) => `Line ${index + 1}`).join("\n");
+  await seedDatabase(page, data);
+  await page.goto("./");
+  await tab(page, "Tasks").click();
+  const longCard = page.locator("#item-task-task-a");
+  const tenLineCard = page.locator("#item-task-task-b");
+  await expect(tenLineCard.getByRole("button", { name: "Show more" })).toHaveCount(0);
+  await expect(longCard.getByRole("button", { name: "Show more" })).toBeVisible();
+  await longCard.getByRole("button", { name: "Show more" }).click();
+  await expect(longCard.getByRole("button", { name: "Show less" })).toBeVisible();
+  await longCard.getByRole("button", { name: "Show less" }).click();
+  await longCard.getByRole("button", { name: "Edit", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit task", exact: true });
+  const wrappedText = "wrap ".repeat(80);
+  await editor.getByRole("textbox", { name: "Description", exact: true }).fill(wrappedText);
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(longCard.getByRole("button", { name: "Show more" })).toHaveCount(0);
+  await page.setViewportSize({ width: 360, height: 800 });
+  await expect(longCard.getByRole("button", { name: "Show more" })).toBeVisible();
+  await longCard.getByRole("button", { name: "Show more" }).click();
+  await expect(longCard.getByRole("button", { name: "Show less" })).toBeVisible();
+  expect((await records(page, "tasks")).find((task) => task.id === "task-a").description).toBe(wrappedText);
+});
+
+test("description toggles look like plain Edit-colored text in both themes", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const data = legacyFixture();
+  data.notes[0].description = Array.from({ length: 12 }, (_, index) => `Line ${index + 1}`).join("\n");
+  await seedDatabase(page, data);
+  await page.goto("./");
+  await tab(page, "Notes").click();
+  const card = page.locator("#item-note-note-a");
+  for (const theme of ["Light", "WOW"]) {
+    await page.getByRole("button", { name: "Open app settings" }).click();
+    const settings = page.getByRole("dialog", { name: "App Settings", exact: true });
+    await settings.getByRole("button", { name: theme, exact: true }).click();
+    await settings.getByRole("button", { name: "Close", exact: true }).click();
+    const toggle = card.getByRole("button", { name: "Show more", exact: true });
+    const edit = card.getByRole("button", { name: "Edit", exact: true });
+    const editStyle = await edit.evaluate(element => {
+      const style = getComputedStyle(element);
+      return { color: style.color, fontFamily: style.fontFamily, fontSize: style.fontSize };
+    });
+    await expect(toggle).toHaveText("Show more ↓");
+    await expect(toggle).toHaveCSS("padding-left", "12px");
+    await expect(toggle).toHaveCSS("padding-right", "12px");
+    await expect(toggle).toHaveCSS("text-align", "center");
+    await expect(toggle).toHaveCSS("color", editStyle.color);
+    await expect(toggle).toHaveCSS("font-family", editStyle.fontFamily);
+    await expect(toggle).toHaveCSS("font-size", editStyle.fontSize);
+    for (const hovered of [false, true]) {
+      if (hovered) await toggle.hover();
+      await expect(toggle).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(toggle).toHaveCSS("background-image", "none");
+      await expect(toggle).toHaveCSS("border-top-width", "0px");
+      await expect(toggle).toHaveCSS("box-shadow", "none");
+      await expect(toggle).toHaveCSS("color", editStyle.color);
+    }
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    const collapse = card.getByRole("button", { name: "Show less", exact: true });
+    await expect(collapse).toHaveText("Show less ↑");
+    await expect(collapse).toHaveAttribute("aria-expanded", "true");
+    await page.keyboard.press("Space");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  }
+});
+
+for (const theme of ["light", "wow"]) {
+  test(`compact ${theme} spacing is shared by collections, More, review, and settings`, async ({ page }) => {
+    const data = legacyFixture();
+    data.settings.theme = theme;
+    data.notes.push({ ...data.notes[0], id: "note-next", title: "Next note" });
+    await seedDatabase(page, data);
+    await page.goto("./");
+    await expect(page.locator(".today-top3-list").first()).toHaveCSS("gap", "8px");
+    async function checkCard(selector: string) {
+      const card = page.locator(selector);
+      await expect(card).toHaveCSS("padding", "6px 12px");
+      await expect(card.locator(".card-footer")).toHaveCSS("margin-top", "0px");
+      await expect(card.locator(".item-timestamp")).toBeVisible();
+      const bottomInset = await card.evaluate(element => {
+        const timestamp = element.querySelector(".item-timestamp")!.getBoundingClientRect();
+        return element.getBoundingClientRect().bottom - timestamp.bottom - Number.parseFloat(getComputedStyle(element).borderBottomWidth);
+      });
+      expect(Math.abs(bottomInset - 6)).toBeLessThan(1);
+    }
+    await tab(page, "Notes").click();
+    await checkCard("#item-note-note-a");
+    await expect(page.locator(".notes-virtual-row").first()).toHaveCSS("padding-bottom", "8px");
+    await expect.poll(() => page.evaluate(() =>
+      document.querySelector("#item-note-note-next")!.getBoundingClientRect().top -
+      document.querySelector("#item-note-note-a")!.getBoundingClientRect().bottom,
+    )).toBeCloseTo(8, 0);
+    await tab(page, "Tasks").click();
+    await checkCard("#item-task-task-a");
+    await expect(page.locator(".task-list")).toHaveCSS("gap", "8px");
+    await tab(page, "Projects").click();
+    await checkCard("#item-project-project-a");
+    await expect(page.locator(".cards:has(> #item-project-project-a)")).toHaveCSS("gap", "8px");
+    await tab(page, "More").click();
+    await expect(page.locator(".more-tabs")).toHaveCSS("margin-top", "8px");
+    await expect(page.locator(".more-tabs")).toHaveCSS("margin-bottom", "8px");
+    const review = page.locator(".review-wrap > .card").first();
+    await expect(review).toHaveCSS("padding", "6px 12px");
+    await expect(review.getByRole("heading", { name: "Review next actions" })).toHaveCSS("margin-top", "0px");
+    await expect(page.locator(".review-wrap")).toHaveCSS("gap", "8px");
+    await page.getByRole("button", { name: "Goals", exact: true }).click();
+    await checkCard("#item-goal-goal-a");
+    await page.getByRole("button", { name: "Routines", exact: true }).click();
+    await checkCard("#item-routine-routine-a");
+    await page.getByRole("button", { name: "Open app settings" }).click();
+    const settings = page.getByRole("dialog", { name: "App Settings", exact: true });
+    await expect(settings.locator(".modal-body")).toHaveCSS("gap", "8px");
+    await expect(settings.locator(".card").first()).toHaveCSS("padding", "6px 12px");
+  });
+
+  test(`compact ${theme} editor and detail spacing avoids stacked gaps without shrinking controls`, async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.setViewportSize({ width: 390, height: 780 });
+    const data = legacyFixture();
+    data.settings.theme = theme;
+    data.projects[0].description = Array.from({ length: 5 }, (_, index) => `[ ] TODO ${index + 1}`).join("\n");
+    await seedDatabase(page, data);
+    await page.goto("./");
+    await tab(page, "Notes").click();
+    await page.locator("#item-note-note-a").getByRole("button", { name: "Edit", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Edit note", exact: true });
+    const body = editor.locator(".modal-body");
+    const convert = editor.locator("section[aria-label='Convert to']");
+    await expect(body).toHaveCSS("gap", "0px");
+    await expect(body).toHaveCSS("padding", "12px");
+    await expect(convert).toHaveCSS("margin-top", "8px");
+    await expect(convert.getByRole("heading")).toHaveCSS("margin-top", "0px");
+    const copy = editor.locator(".copy-note");
+    await expect(copy).toHaveCSS("margin-top", "8px");
+    await copy.getByRole("button", { name: "Copy text" }).click();
+    await expect(copy.getByRole("status")).toHaveText("Note copied.");
+    const feedbackGap = await copy.evaluate(element =>
+      element.querySelector("[role=status]")!.getBoundingClientRect().top -
+      element.querySelector("button")!.getBoundingClientRect().bottom,
+    );
+    expect(feedbackGap).toBeCloseTo(6, 0);
+    await expect(editor.locator(".entity-metadata")).toHaveCSS("padding", "0px");
+    await expect(editor.locator(".entity-metadata")).toHaveCSS("margin-top", "6px");
+    expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
+    await expect(editor.getByRole("button", { name: "Save", exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toHaveCSS("min-height", "48px");
+    await editor.getByRole("button", { name: "Close", exact: true }).click();
+
+    await tab(page, "Projects").click();
+    await page.locator("#item-project-project-a").getByRole("button", { name: "Open", exact: true }).click();
+    const detail = page.getByRole("dialog", { name: "Website project", exact: true });
+    await expect(detail.locator(".modal-body")).toHaveCSS("padding", "12px");
+    await expect(detail.locator(".entity-description")).toHaveCSS("margin-top", "0px");
+    const rows = detail.locator(".detail-todo");
+    await expect(rows).toHaveCount(5);
+    for (const row of await rows.all()) {
+      const box = (await row.boundingBox())!;
+      expect(box.height).toBeLessThanOrEqual(54);
+      expect((await row.locator("label").boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      expect((await row.getByRole("button", { name: "Edit", exact: true }).boundingBox())!.height).toBe(36);
+    }
+    const first = (await rows.nth(0).boundingBox())!;
+    const second = (await rows.nth(1).boundingBox())!;
+    expect(second.y - first.y - first.height).toBeCloseTo(0, 0);
+    await rows.nth(0).getByRole("button", { name: "Edit", exact: true }).click();
+    await expect(detail.getByRole("textbox", { name: "Edit TODO text" })).toBeVisible();
+    expect(await detail.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await detail.getByRole("button", { name: "Cancel", exact: true }).click();
+    await detail.getByRole("button", { name: "Close", exact: true }).click();
+    await tab(page, "More").click();
+    await page.getByRole("button", { name: "Goals", exact: true }).click();
+    await page.locator("#item-goal-goal-a").getByRole("button", { name: "Open", exact: true }).click();
+    const goalBody = page.getByRole("dialog").locator(".modal-body");
+    await expect(goalBody.locator(".entity-description")).toHaveCount(0);
+    await expect(goalBody.locator("> .actions").first()).toHaveCSS("margin-top", "0px");
+  });
+}
 
 test("real v1 transition, compact projects, checklist edits, complete and reopen", async ({
   page,
@@ -176,7 +429,7 @@ test("direct edit, copy fallback, current-draft conversion and safe undo", async
   const converted = (await records(page, "notes")).find(
     (n) => n.id === "note-a",
   );
-  expect(converted.status).toBe("processed");
+  expect(converted.status).toBe("archived");
   expect(converted.triagedId).toBeTruthy();
   expect(
     (await records(page, "tasks")).find((t) => t.id === converted.triagedId),
@@ -272,7 +525,7 @@ test("goal primary update, chart history and achievement preserve linked work", 
   ).not.toBeVisible();
   page.once("dialog", (dialog) => dialog.accept());
   await dialog
-    .getByRole("button", { name: "Achieve goal", exact: true })
+    .getByRole("button", { name: "Complete goal", exact: true })
     .click();
   await expect(
     dialog.getByRole("button", { name: "Reopen as Active", exact: true }),
@@ -288,7 +541,7 @@ test("remembered filters, search reveal and dirty dialog keyboard protection", a
   await seed(page);
   await tab(page, "Tasks").click();
   await page
-    .getByRole("button", { name: "View: Unfinished", exact: true })
+    .getByRole("button", { name: "View: To do", exact: true })
     .click();
   await page.getByRole("button", { name: "Completed", exact: true }).click();
   await page.reload();
@@ -409,7 +662,7 @@ test("installed worker version stays accurate and manual update preserves captur
     .fill("Draft survives update");
   await page.getByRole("button", { name: "Open app settings" }).click();
   await expect(page.getByText("Version: v31", { exact: true })).toBeVisible();
-  await request.post("http://127.0.0.1:4173/__test/update");
+  await request.post("/__test/update");
   await page.evaluate(async () => {
     const reg = await navigator.serviceWorker.ready;
     await reg.update();
@@ -647,7 +900,7 @@ test("fresh create flows, task completion, daily routine, review and full reset"
     .getByRole("button", { name: "Delete all data", exact: true })
     .click();
   await expect.poll(async () => (await records(page, "tasks")).length).toBe(0);
-  expect(await records(page, "meta")).toEqual([]);
+  expect(await records(page, "meta")).toEqual([{ id: "status-schema", data: DB_VERSION }]);
   expect(await records(page, "notes")).toEqual([]);
   expect(await records(page, "routines")).toEqual([]);
 });
@@ -729,7 +982,7 @@ test(`v${version} upgrade preserves every record, uses only comfortable cards an
   for (const [store, before] of Object.entries(data)) {
     const after = await records(page, store);
     if (store === "settings") expect(after[0]).toEqual({ ...before, listDensity: "comfortable" });
-    else expect(canonical(after)).toEqual(canonical(before));
+    else expect(canonical(after)).toEqual(canonical(migrateStatuses({ ...data, settings: { ...data.settings, listDensity: "comfortable" } })[store as keyof AppStateData]));
   }
   const meta = await records(page, "meta");
   expect(canonical(meta.find(row => row.id === "pre-v4").data.data)).toEqual(canonical(data));
@@ -739,6 +992,8 @@ test(`v${version} upgrade preserves every record, uses only comfortable cards an
   await expect(page.getByRole("button", { name: /Compact|Comfortable/ })).toHaveCount(0);
   await page.reload();
   await tab(page, "Tasks").click();
+  await page.getByRole("button", { name: "View: To do", exact: true }).click();
+  await page.locator(".filter-menu").getByRole("button", { name: "Active", exact: true }).click();
   const card = page.locator("#item-task-task-b");
   await expect(card).not.toContainText("postponed");
   await expect(card.locator(".item-timestamp")).toContainText("Created");
@@ -751,13 +1006,13 @@ test(`v${version} upgrade preserves every record, uses only comfortable cards an
   await tab(page, "Notes").click();
   await page.getByRole("button", { name: "View: Inbox", exact: true }).click();
   await expect(page.locator(".filter-menu").getByRole("button", { name: "Inbox", exact: true })).toHaveCount(1);
-  await page.getByRole("button", { name: "Saved", exact: true }).click();
+  await page.getByRole("button", { name: "Pinned", exact: true }).click();
   await expect(page.locator("#item-note-note-a")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 }
 
-test("focused urgent tasks appear only once, with due and paused-project exceptions visible", async ({ page }) => {
+test("focused urgent tasks appear only once, with due and archived-project exceptions visible", async ({ page }) => {
   await seed(page);
   await page.getByRole("combobox", { name: "Choose focus task" }).selectOption("task-a");
   await page.getByRole("button", { name: "Pin", exact: true }).click();
@@ -772,11 +1027,11 @@ test("focused urgent tasks appear only once, with due and paused-project excepti
   await expect(page.getByRole("button", { name: "Unpin focus", exact: true })).toHaveCount(0);
   await tab(page, "Projects").click();
   await page.locator("#item-project-project-a").getByRole("button", { name: "Open", exact: true }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Mark Paused", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Archive", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
   await tab(page, "Today").click();
   await expect(urgent).toHaveCount(1);
-  await expect(urgent).toContainText("project paused");
+  await expect(urgent).toContainText("project archived");
 });
 
 test("project conversion opens its result, Back to Inbox works, delete is directly accessible", async ({ page }) => {
@@ -891,7 +1146,7 @@ test("note description grows with the viewport while title and actions stay visi
     await expect.poll(() => editor.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(height);
     await expect(description).toBeInViewport({ ratio: 1 });
     await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toBeInViewport({ ratio: 1 });
-    for (const name of ["Task", "Project", "Other types", "Copy text", "Discard", "Delete", "Save"]) {
+    for (const name of ["Task", "Project", "Other types", "Copy text", "Archive", "Delete", "Save"]) {
       await expect(editor.getByRole("button", { name, exact: true })).toBeInViewport({ ratio: 1 });
     }
     heights.push((await description.boundingBox())!.height);
@@ -907,31 +1162,34 @@ test("note description grows with the viewport while title and actions stay visi
   await expect(editor.getByRole("button", { name: "Delete", exact: true })).toBeInViewport({ ratio: 1 });
 });
 
-test("visible Discard and Delete require confirmation and cancellation preserves the item", async ({ page }) => {
+test("Archive is reversible while Delete is permanent and requires confirmation", async ({ page }) => {
   await seed(page);
   await tab(page, "Notes").click();
   await page.locator("#item-note-note-a").getByRole("button", { name: "Edit", exact: true }).click();
   const editor = page.getByRole("dialog");
   await expect(editor.getByText("Danger zone", { exact: true })).toHaveCount(0);
-  for (const name of ["Discard", "Delete"]) {
-    page.once("dialog", dialog => dialog.dismiss());
-    await editor.getByRole("button", { name, exact: true }).click();
-    expect((await records(page, "notes")).find(n => n.id === "note-a").status).toBe("inbox");
-  }
-  page.once("dialog", dialog => dialog.accept());
-  await editor.getByRole("button", { name: "Discard", exact: true }).click();
-  await expect.poll(async () => (await records(page, "notes")).find(n => n.id === "note-a").status).toBe("discarded");
-  await editor.getByRole("button", { name: "Recover", exact: true }).click();
+  await expect(editor.getByRole("button", { name: "Discard", exact: true })).toHaveCount(0);
+  page.once("dialog", dialog => dialog.dismiss());
+  await editor.getByRole("button", { name: "Delete", exact: true }).click();
+  expect((await records(page, "notes")).find(n => n.id === "note-a").status).toBe("inbox");
+  await editor.getByRole("button", { name: "Archive", exact: true }).click();
+  await expect.poll(async () => (await records(page, "notes")).find(n => n.id === "note-a").status).toBe("archived");
+  await editor.getByRole("button", { name: "Unarchive to Inbox", exact: true }).click();
   await expect.poll(async () => (await records(page, "notes")).find(n => n.id === "note-a").status).toBe("inbox");
+  page.once("dialog", dialog => dialog.accept());
+  await editor.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  expect((await records(page, "notes")).some(n => n.id === "note-a")).toBe(false);
 });
 
-test("tab headers sit directly below the top bar without a blank spacer", async ({ page }) => {
+test("tab headers stay flush except for More's intentional eight-pixel inset", async ({ page }) => {
   await seed(page);
   for (const [name, selector] of [["Notes", ".section-head"], ["Tasks", ".section-head"], ["Projects", ".section-head"], ["More", ".more-tabs"]]) {
     await tab(page, name).click();
     const topBar = await page.locator(".topbar").boundingBox();
     const tabBar = await page.locator(selector).boundingBox();
-    expect(Math.abs(tabBar!.y - (topBar!.y + topBar!.height))).toBeLessThanOrEqual(1);
+    const expectedGap = name === "More" ? 8 : 0;
+    expect(Math.abs(tabBar!.y - (topBar!.y + topBar!.height) - expectedGap)).toBeLessThanOrEqual(1);
   }
 });
 
@@ -943,7 +1201,7 @@ test("item cards use tighter padding and shorter actions without hiding timestam
     expect(await card.evaluate(el => {
       const style = getComputedStyle(el);
       return [style.paddingTop, style.paddingRight, style.paddingBottom, style.paddingLeft];
-    })).toEqual(["12px", "12px", "12px", "12px"]);
+    })).toEqual(["6px", "12px", "6px", "12px"]);
     await expect(card.locator(".item-timestamp")).toBeVisible();
     for (const button of await card.getByRole("button").all())
       expect((await button.boundingBox())!.height).toBe(36);

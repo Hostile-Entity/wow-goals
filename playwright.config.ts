@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+const port = process.env.PLAYWRIGHT_PORT ?? "4173";
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
@@ -6,7 +7,7 @@ export default defineConfig({
   timeout: 30000,
   expect: { timeout: 8000 },
   use: {
-    baseURL: "http://127.0.0.1:4173/wow-goals/",
+    baseURL: `http://127.0.0.1:${port}/wow-goals/`,
     trace: "retain-on-failure",
     serviceWorkers: "allow",
   },
@@ -16,7 +17,8 @@ export default defineConfig({
   ],
   webServer: {
     command: "node tests/serve-production.mjs",
-    url: "http://127.0.0.1:4173/wow-goals/",
+    env: { PORT: port },
+    url: `http://127.0.0.1:${port}/wow-goals/`,
     reuseExistingServer: false,
   },
 });

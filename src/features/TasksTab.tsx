@@ -4,6 +4,7 @@ import { Task } from "../types";
 import { priorityLabel } from "../state/lifecycle";
 import { useAction } from "../components/useAction";
 import { ItemTimestamp } from "../components/ItemTimestamp";
+import { ExpandableDescription } from "../components/ExpandableDescription";
 
 interface TasksTabProps {
   filteredTasks: AppData["filteredTasks"];
@@ -58,14 +59,16 @@ export function TasksTab({
               <div className="entity-main">
                 <div className="title entity-title">{task.title}</div>
                 {task.description ? (
-                  <div className="entity-description">{task.description}</div>
+                  <ExpandableDescription className="entity-description">
+                    {task.description}
+                  </ExpandableDescription>
                 ) : null}
               </div>
               <div className="entity-side">
                 <button className="manage-btn" onClick={() => onManage(task)}>
                   Edit
                 </button>
-                {!["done", "discarded"].includes(task.status) &&
+                {["open", "doing"].includes(task.status) &&
                   <button className="complete-task-btn" aria-label={`Complete ${task.title}`} disabled={action.pending}
                     onClick={() => void action.run(() => onComplete(task.id))}>Done</button>}
               </div>

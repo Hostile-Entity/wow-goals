@@ -11,6 +11,7 @@ import {
 } from "../../src/db";
 import { backupPayload, parseBackup } from "../../src/db/backup";
 import { DB_VERSION, emptyData, migrateV1 } from "../../src/db/schema";
+import { migrateStatuses } from "../../src/db/statuses";
 import {
   applyChanges,
   completeTaskCommand,
@@ -26,7 +27,7 @@ import { projectProgressByDay } from "../../src/state/history";
 import { AppStateData } from "../../src/types";
 import { legacyFixture } from "../fixtures/legacy";
 
-const migrated = () => migrateV1(legacyFixture() as unknown as AppStateData);
+const migrated = () => migrateStatuses(migrateV1(legacyFixture() as unknown as AppStateData));
 const recordSet = (data = migrated()) =>
   ({ ...data, settings: [data.settings], meta: [] }) as Records;
 async function seedLegacy(name: string, keyless = false, version = 1) {
@@ -54,7 +55,7 @@ async function seedLegacy(name: string, keyless = false, version = 1) {
 }
 const name = () => `test-${crypto.randomUUID()}`;
 async function seedV2(dbName: string, version = 2, density?: string) {
-  const data = migrated();
+  const data = migrateV1(legacyFixture() as unknown as AppStateData);
   const settings = { ...data.settings } as Partial<AppStateData["settings"]>;
   delete settings.listDensity;
   if (density) Object.assign(settings, { listDensity: density });
@@ -88,7 +89,7 @@ describe("one-time database transition", () => {
     const old = await seedV2(dbName, version);
     const db = await openDatabase(dbName);
     const next = await readSnapshot(db);
-    expect(canonical(next)).toEqual(canonical({ ...old, settings: { ...old.settings, listDensity: "comfortable" } }));
+    expect(canonical(next)).toEqual(canonical(migrateStatuses({ ...old, settings: { ...old.settings, listDensity: "comfortable" } })));
     const meta = await new Promise<any[]>(resolve => {
       const read = db.transaction("meta").objectStore("meta").getAll();
       read.onsuccess = () => resolve(read.result);
@@ -127,7 +128,7 @@ describe("one-time database transition", () => {
     const dbName = name();
     const before = await seedV2(dbName, 3, "compact");
     const db = await openDatabase(dbName);
-    expect(canonical(await readSnapshot(db))).toEqual(canonical({ ...before, settings: { ...before.settings, listDensity: "comfortable" } }));
+    expect(canonical(await readSnapshot(db))).toEqual(canonical(migrateStatuses({ ...before, settings: { ...before.settings, listDensity: "comfortable" } })));
     db.close();
     const reopened = await openDatabase(dbName);
     expect(reopened.version).toBe(DB_VERSION);
@@ -149,7 +150,7 @@ describe("one-time database transition", () => {
       expect(data.projects.map((p) => p.status)).toEqual([
         "active",
         "done",
-        "paused",
+        "archived",
       ]);
       expect(data.notes.find((n) => n.id === "note-a")?.description).toBe(
         legacy.notes[0].description,
@@ -194,7 +195,7 @@ describe("one-time database transition", () => {
       const data = await readSnapshot(db);
       expect(data.notes[0].status).toBe("inbox");
       expect(data.projects.find((p) => p.id === "project-paused")?.status).toBe(
-        "paused",
+        "archived",
       );
       db.close();
       db = await openDatabase(dbName);
@@ -232,17 +233,19 @@ describe("one-time database transition", () => {
 });
 
 describe("backup safety", () => {
-  it("accepts an existing v2 backup, adding only the density default", () => {
+  it("accepts older backups, normalizing density and retired statuses", () => {
     const data = migrated();
-    const old = structuredClone(data) as any;
+    const old = migrateV1(legacyFixture() as unknown as AppStateData) as any;
     delete old.settings.listDensity;
     expect(parseBackup({ app: "wow-goals", schemaVersion: 2, data: old })).toEqual(data);
     expect(old.settings).not.toHaveProperty("listDensity");
     expect(parseBackup(backupPayload(data))).toEqual(data);
-    const compact = structuredClone(data);
+    const compact = migrateV1(legacyFixture() as unknown as AppStateData);
     Object.assign(compact.settings, { listDensity: "compact" });
     expect(parseBackup({ app: "wow-goals", schemaVersion: 3, data: compact })).toEqual(data);
-    expect(() => parseBackup({ app: "wow-goals", schemaVersion: DB_VERSION, data: compact })).toThrow("density");
+    const invalidDensity = structuredClone(data);
+    Object.assign(invalidDensity.settings, { listDensity: "compact" });
+    expect(() => parseBackup({ app: "wow-goals", schemaVersion: DB_VERSION, data: invalidDensity })).toThrow("density");
     const invalid = backupPayload(data) as any;
     invalid.data.settings.listDensity = "invalid";
     expect(() => parseBackup(invalid)).toThrow("density");
@@ -319,20 +322,21 @@ describe("backup safety", () => {
       await new Promise((resolve) => {
         read.onsuccess = () => resolve(read.result);
       }),
-    ).toEqual([]);
+    ).toEqual([{ id: "status-schema", data: DB_VERSION }]);
     db.close();
   });
 });
 
 describe("selected core flows", () => {
   it("uses friendly labels without collapsing progress states or duplicate default filters", () => {
-    expect(filterOptions("notes")).not.toContain("inbox");
-    expect(filterOptions("goals")).not.toContain("active");
+    expect(filterOptions("notes")).toEqual(["inbox", "reference", "archived", "all"]);
+    expect(filterOptions("goals")).toEqual(["active", "achieved", "archived", "all"]);
     expect(filterOptions("tasks")).toContain("doing");
     expect(filterOptions("projects")).toContain("planned");
     expect(filterLabel("notes", "actionable")).toBe("Inbox");
-    expect(filterLabel("tasks", "actionable")).toBe("Unfinished");
-    expect(statusLabel("reference")).toBe("Saved");
+    expect(filterLabel("tasks", "open")).toBe("To do");
+    expect(statusLabel("doing")).toBe("Active");
+    expect(statusLabel("reference")).toBe("Pinned");
     expect(statusLabel("enabled")).toBe("On");
   });
   it("completion Undo restores in-progress status and removes only its own history entry", () => {
@@ -372,7 +376,7 @@ describe("selected core flows", () => {
       state.tasks.find((t) => t.title === "Edited title")?.description,
     ).toBe("Edited\nmessage");
     const converted = state.notes.find((n) => n.id === note.id)!;
-    expect(converted.status).toBe("processed");
+    expect(converted.status).toBe("archived");
     expect(converted.triagedId).toBeTruthy();
     expect(() =>
       triageCommand(recordSet(state), converted, "task", "2026-11-12"),

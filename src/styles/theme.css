@@ -32,6 +32,13 @@
   --button-primary-height: 40px;
   --notes-composer-height: 60px;
   --notes-composer-live-height: 60px;
+  --space-card-block: 6px;
+  --space-card-inline: 12px;
+  --space-list: 8px;
+  --space-section: 8px;
+  --space-heading: 6px;
+  --space-row: 4px;
+  --space-dialog-inset: 12px;
 
   --body-bg: #f5f7f6;
   --button-bg: #ffffff;
@@ -45,6 +52,7 @@
 }
 
 :root[data-theme="wow"] {
+  color-scheme: dark;
   --wow-bg: #05070b;
   --wow-bg-mid: #101520;
   --wow-bg-top: #181f30;

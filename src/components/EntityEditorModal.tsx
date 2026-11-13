@@ -212,10 +212,12 @@ export function EntityEditorModal({
             </label>
           )}
           <label className="inline-select editor-description">
-            <span className="field-label">
+            <span className="field-label" id={type === "note" ? "note-description-label" : undefined}>
               {type === "project" ? "TODO source" : "Description"}
             </span>
             <textarea
+              aria-labelledby={type === "note" ? "note-description-label" : undefined}
+              aria-describedby={type === "note" ? "note-markdown-hint" : undefined}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
                 rows={type === "project" ? 5 : 3}
@@ -225,6 +227,11 @@ export function EntityEditorModal({
                   : "Description"
               }
             />
+            {type === "note" && (
+              <span id="note-markdown-hint" className="meta markdown-hint">
+                Markdown: **bold**, *italic*, lists, [link](url), `code`.
+              </span>
+            )}
           </label>
           {type === "project" && (
             <p className="meta">
@@ -299,7 +306,7 @@ export function EntityEditorModal({
                 <option value="">None</option>
                 {missingProject && (
                   <option value={projectId}>
-                    Existing project (closed, paused or missing)
+                    Existing project (completed, archived or missing)
                   </option>
                 )}
                 {projects.map((row) => (
@@ -506,7 +513,7 @@ export function EntityEditorModal({
                 disabled={
                   action.pending ||
                   entity.status === "done" ||
-                  entity.status === "discarded"
+                  entity.status === "archived"
                 }
                 onClick={() => {
                   if (guard())

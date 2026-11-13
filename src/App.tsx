@@ -116,8 +116,8 @@ function App() {
   const app = useAppData();
   function closeEditor() { setEditor(null); setConversionNoteId(null); }
   const conversion = conversionNoteId ? {
-    back: () => { closeEditor(); app.setTab("notes"); app.selectFilter("notes", "actionable"); },
-    undo: async () => { await app.undoTriage(conversionNoteId); closeEditor(); app.setTab("notes"); app.selectFilter("notes", "actionable"); },
+    back: () => { closeEditor(); app.setTab("notes"); app.selectFilter("notes", "inbox"); },
+    undo: async () => { await app.undoTriage(conversionNoteId); closeEditor(); app.setTab("notes"); },
   } : undefined;
   const searchInputRef = useRef<HTMLInputElement>(null);
   const logScrollRef = useRef<HTMLDivElement>(null);
@@ -180,10 +180,6 @@ function App() {
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", app.theme);
-  }, [app.theme]);
 
   useEffect(() => {
     if (!isSearchMode) return;
@@ -450,21 +446,19 @@ function App() {
 
   if (!app.loaded)
     return (
-      <div className="loading">
-        <section>
-          <p>{app.error || "Loading control deck…"}</p>
-          {app.error && (
-            <>
-              <p>
-                Your local data has not been reset. Close other app windows if
-                the upgrade is blocked.
-              </p>
-              <button onClick={() => void app.reloadAll()}>
-                Retry opening data
-              </button>
-            </>
-          )}
-        </section>
+      <div className="loading" aria-busy={!app.error} aria-label="Opening WowGoals">
+        {app.error && (
+          <section role="alert">
+            <p>{app.error}</p>
+            <p>
+              Your local data has not been reset. Close other app windows if
+              the upgrade is blocked.
+            </p>
+            <button onClick={() => void app.reloadAll()}>
+              Retry opening data
+            </button>
+          </section>
+        )}
       </div>
     );
 

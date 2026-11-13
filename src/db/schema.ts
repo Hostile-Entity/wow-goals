@@ -1,7 +1,7 @@
 import { AppSettings, AppStateData } from "../types";
 
 export const DB_NAME = "wow-goals-db";
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 export const dataStores = [
   "notes",
   "tasks",

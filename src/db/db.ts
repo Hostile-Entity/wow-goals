@@ -18,6 +18,7 @@ import {
   migrateV1,
   migrateV2,
 } from "./schema";
+import { migrateStatuses } from "./statuses";
 
 export type StoreName =
   | "notes"
@@ -162,6 +163,7 @@ function openAtVersion(name: string, version?: number): Promise<IDBDatabase> {
       const tx = request.transaction!;
       if (event.oldVersion === 0) {
         tx.objectStore("settings").put(emptyData().settings);
+        tx.objectStore("meta").put({ id: "status-schema", data: DB_VERSION });
         return;
       }
       // Read the pre-upgrade snapshot and perform every migration write in this
@@ -177,12 +179,27 @@ function openAtVersion(name: string, version?: number): Promise<IDBDatabase> {
           remaining -= 1;
           if (remaining) return;
           try {
-            const next = wasV2 ? migrateV2(snapshot) : migrateV1(snapshot);
+            const next = migrateStatuses(wasV2 ? migrateV2(snapshot) : migrateV1(snapshot));
+            const previousSchema = !wasV2 ? 1
+              : !("listDensity" in snapshot.settings) ? 2
+                : (snapshot.settings.listDensity as string) === "compact" ? 3 : 4;
             tx.objectStore("meta").put({
-              id: "pre-v4",
+              id: "pre-v5",
               at: new Date().toISOString(),
-              data: { app: "wow-goals", schemaVersion: wasV2 ? ("listDensity" in snapshot.settings ? 3 : 2) : 1, data: snapshot },
+              data: {
+                app: "wow-goals",
+                schemaVersion: previousSchema,
+                data: snapshot,
+              },
             });
+            // Keep older safety snapshots intact when only statuses are changing.
+            if (!wasV2 || snapshot.settings.listDensity !== "comfortable") {
+              tx.objectStore("meta").put({
+                id: "pre-v4",
+                at: new Date().toISOString(),
+                data: { app: "wow-goals", schemaVersion: wasV2 ? ("listDensity" in snapshot.settings ? 3 : 2) : 1, data: snapshot },
+              });
+            }
             if (!wasV2) {
               tx.objectStore("meta").put({
                 id: "pre-v2",
@@ -200,11 +217,12 @@ function openAtVersion(name: string, version?: number): Promise<IDBDatabase> {
                   })),
                 },
               });
-              for (const storeName of dataStores)
-                for (const row of next[storeName])
-                  put(tx.objectStore(storeName), row);
             }
+            for (const storeName of dataStores)
+              for (const row of next[storeName])
+                put(tx.objectStore(storeName), row);
             put(tx.objectStore("settings"), next.settings);
+            put(tx.objectStore("meta"), { id: "status-schema", data: DB_VERSION } as StoreMap["meta"]);
           } catch (error) {
             migrationError = error;
             tx.abort();
@@ -226,19 +244,21 @@ function openAtVersion(name: string, version?: number): Promise<IDBDatabase> {
         db.close();
         dbPromise = null;
       };
-      // Some legacy installations used a higher physical version to repair
-      // stores. Detect the new preference too, rather than trusting that number.
-      const settings = db.transaction("settings").objectStore("settings").get("settings");
-      settings.onsuccess = () => {
-        if (settings.result && settings.result.listDensity !== "comfortable") {
+      // Physical versions can exceed the app schema after legacy store repairs.
+      const tx = db.transaction(["settings", "meta"]);
+      const settings = tx.objectStore("settings").get("settings");
+      const schema = tx.objectStore("meta").get("status-schema");
+      tx.oncomplete = () => {
+        if ((settings.result && settings.result.listDensity !== "comfortable") ||
+            schema.result?.data !== DB_VERSION) {
           const nextVersion = db.version + 1;
           db.close();
           void openAtVersion(name, nextVersion).then(resolve, reject);
         } else resolve(db);
       };
-      settings.onerror = () => {
+      tx.onerror = () => {
         db.close();
-        reject(settings.error);
+        reject(tx.error);
       };
     };
     request.onerror = () => {
@@ -449,5 +469,6 @@ export async function clearDatabase(db: IDBDatabase): Promise<void> {
   const done = txDone(tx);
   for (const store of REQUIRED_STORES) tx.objectStore(store).clear();
   put(tx.objectStore("settings"), emptyData().settings);
+  put(tx.objectStore("meta"), { id: "status-schema", data: DB_VERSION } as StoreMap["meta"]);
   await done;
 }

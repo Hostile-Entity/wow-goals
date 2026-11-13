@@ -37,7 +37,7 @@
 
 .cards {
   display: grid;
-  gap: 8px;
+  gap: var(--space-list);
 }
 
 .card {
@@ -49,8 +49,21 @@
     color-mix(in srgb, var(--wow-panel-inner) 84%, #1a2333) 100%
   );
   box-shadow: 0 0 0 1px rgba(200, 155, 60, 0.15), 0 0 7px rgba(0, 0, 0, 0.68) inset;
-  padding: 6px;
+  padding: var(--space-card-block) var(--space-card-inline);
   animation: fade-in 180ms ease both;
+}
+
+.card > :is(h2, h3, h4, p):first-child,
+.checklist > :is(h2, h3, h4, p):first-child {
+  margin-top: 0;
+}
+
+.card > p {
+  margin-block: var(--space-heading);
+}
+
+.card > :last-child {
+  margin-bottom: 0;
 }
 
 .card-top {
@@ -75,7 +88,7 @@
 .tags {
   color: var(--muted);
   font-size: 0.75rem;
-  margin-bottom: 7px;
+  margin-bottom: var(--space-heading);
 }
 
 .actions {
@@ -156,7 +169,7 @@
 
 .today-top3-list {
   display: grid;
-  gap: 8px;
+  gap: var(--space-list);
 }
 
 .today-task-card {
@@ -197,8 +210,8 @@
 
 .checklist {
   display: grid;
-  gap: 8px;
-  padding: 8px;
+  gap: var(--space-list);
+  padding: var(--space-card-block) var(--space-card-inline);
   border: 1px solid rgba(0, 0, 0, 0.85);
   border-radius: var(--radius);
   background: linear-gradient(180deg, var(--wow-panel) 0%, var(--wow-panel-inner) 100%);
@@ -424,7 +437,7 @@
   top: 0;
   left: 0;
   width: 100%;
-  padding-bottom: 8px;
+  padding-bottom: var(--space-list);
 }
 
 .notes-virtual-meta {
@@ -504,7 +517,11 @@
 
 .review-wrap {
   display: grid;
-  gap: 10px;
+  gap: var(--space-section);
+}
+
+.review-wrap > p {
+  margin: 0;
 }
 
 .review-week-header {
@@ -681,7 +698,7 @@
   top: 0;
   left: 0;
   width: 100%;
-  padding-bottom: 8px;
+  padding-bottom: var(--space-list);
 }
 
 .is-dimmed {
@@ -702,6 +719,10 @@
   color: color-mix(in srgb, var(--muted) 85%, #8f99ad);
 }
 
+.is-dimmed .description-toggle {
+  --description-toggle-color: color-mix(in srgb, var(--muted) 85%, #8f99ad);
+}
+
 .is-in-progress {
   border-color: color-mix(in srgb, var(--wow-gold) 64%, #3c2b10);
   background: radial-gradient(circle at top, rgba(144, 112, 35, 0.22) 0, transparent 65%), linear-gradient(180deg, var(--wow-panel) 0%, var(--wow-panel-inner) 100%);
@@ -720,11 +741,14 @@
   align-content: flex-start;
 }
 
-.project-summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; font-size: .86rem; margin: 3px 0 8px; }
-.detail-todo { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--line); padding: 8px 0; }
-.detail-todo label { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.detail-todo input[type=checkbox] { width: 22px; height: 22px; flex: 0 0 auto; }
-.detail-todo .row { flex-basis: 100%; }
+.project-summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; font-size: .86rem; margin: 2px 0 var(--space-row); }
+.detail-todo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-heading); border-bottom: 1px solid var(--line); padding: var(--space-row) 0; }
+.detail-todo label { display: flex; align-items: center; gap: var(--space-heading); flex: 1; min-width: 0; min-height: 44px; overflow-wrap: anywhere; }
+.detail-todo input[type=checkbox] { width: 22px; height: 22px; min-height: 22px; flex: 0 0 auto; }
+.detail-todo .row { flex-basis: 100%; margin: 0; }
+/* Repeated rows are not separate dialog sections. */
+.entity-detail > .modal-body > .detail-todo + .detail-todo { margin-top: 0; }
+.entity-detail > .modal-body > h4 + .detail-todo { margin-top: var(--space-heading); }
 .today-task-link { text-align: left; font-weight: 700; border: 0; background: transparent; padding-left: 0; }
 .note-side [role=toolbar] { flex-direction: column; }
 .today-task-link { max-width: 100%; overflow-wrap: anywhere; }
@@ -732,11 +756,9 @@
 .routine-btn:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 
-.cards { gap: 12px; }
-.card { padding: 12px; }
 .title { font-size: 1rem; line-height: 1.5; font-weight: 650; margin-bottom: 6px; }
 .tags, .meta-row { font-size: .8rem; line-height: 1.5; }
-.card-footer { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 8px; margin-top: 4px; }
+.card-footer { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 8px; margin-top: 0; }
 .card-footer-left { flex: 1 1 140px; }
 .card-footer-left:not(:has(> :not(:empty))) { display: none; }
 .item-timestamp { margin-left: auto; text-align: right; max-width: 100%; font-size: .72rem; color: var(--muted); }
@@ -749,10 +771,10 @@
 .complete-task-btn { color: var(--accent-2); }
 .today-header { padding-bottom: 4px; border-bottom: 1px solid var(--line); }
 .today-header h2 { margin-bottom: 4px; }
-.today-header p { margin: 0 0 18px; }
-.today-task-card { margin-bottom: 4px; }
+.today-header p { margin: 0 0 var(--space-section); }
+.today-task-card { margin-bottom: 0; }
 .today-task-link { min-height: var(--button-height); line-height: 1.5; }
-.today-tab > .row { margin-top: 12px; }
+.today-tab > .row { margin-top: var(--space-section); }
 .review-grid { --review-grid-row-size: 36px; }
 :root[data-theme="light"] .card, :root[data-theme="light"] .checklist, :root[data-theme="light"] .review-grid-wrap { border-color: var(--line); }
 :root[data-theme="light"] .is-dimmed { filter: none; border-color: var(--line); background: var(--panel-alt); box-shadow: none; }
@@ -767,9 +789,9 @@
 /* Editor rules belong after the shared checklist styles to avoid reintroducing
    desktop-style side labels and nested boxes on phones. */
 .entity-editor .editor-checklist { border: 0; padding: 0; background: transparent; box-shadow: none; }
-.entity-editor .editor-fields { gap: 20px; }
-.entity-editor .editor-group { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: 12px; }
-.entity-editor .editor-group legend { padding: 0; margin-bottom: 10px; font-size: .85rem; color: var(--muted); font-weight: 600; }
+.entity-editor .editor-fields { gap: var(--space-section); }
+.entity-editor .editor-group { min-width: 0; margin: 0; padding: 0; border: 0; display: grid; gap: var(--space-section); }
+.entity-editor .editor-group legend { padding: 0; margin-bottom: var(--space-heading); font-size: .85rem; color: var(--muted); font-weight: 600; }
 .entity-editor .editor-checklist .inline-select { display: grid; grid-template-columns: minmax(0, 1fr); align-items: stretch; gap: 5px; font-size: .85rem; }
 .entity-editor .editor-checklist .field-label { white-space: normal; overflow: visible; }
 .entity-editor .editor-schedule { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -777,9 +799,9 @@
 .entity-editor .editor-checklist .meta { margin: 0; }
 .entity-editor .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .entity-editor .actions button { width: 100%; min-height: var(--button-height); font-size: .85rem; padding: 6px 12px; }
-.entity-editor .lifecycle-actions { padding-top: 16px; border-top: 1px solid var(--line); }
+.entity-editor .lifecycle-actions { padding-top: var(--space-section); border-top: 1px solid var(--line); }
 .entity-editor .copy-note .meta:empty { display: none; }
-.entity-editor .entity-metadata { margin-top: 4px; padding-bottom: 0; }
+.entity-editor .entity-metadata { margin-top: var(--space-heading); padding: 0; }
 /* Give note text the spare height without pushing its actions off-screen.
    On short viewports the body still scrolls, rather than hiding controls. */
 .note-editor > .modal-body { display: flex; flex-direction: column; }
@@ -790,8 +812,9 @@
 .note-editor .editor-details { display: flex; flex-direction: column; }
 .note-editor .editor-fields,
 .note-editor .editor-details { flex: 1 0 auto; }
-.note-editor .editor-description { flex: 1 0 auto; grid-template-rows: auto minmax(96px, 1fr); }
+.note-editor .editor-description { flex: 1 0 auto; grid-template-rows: auto minmax(96px, 1fr) auto; }
 .note-editor .editor-description textarea { height: 100%; min-height: 96px; resize: none; }
+.note-editor .markdown-hint { font-size: .7rem; }
 @media (max-width: 360px) {
   .entity-editor .editor-schedule { grid-template-columns: minmax(0, 1fr); }
 }
