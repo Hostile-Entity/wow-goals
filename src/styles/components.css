@@ -311,8 +311,12 @@ dialog:is(.entity-editor, .entity-detail) {
   margin: 0;
 }
 
-.note-markdown :is(p, li) {
+.note-markdown p {
   white-space: pre-wrap;
+}
+
+.note-markdown li {
+  white-space: normal;
 }
 
 .note-markdown :is(ul, ol) {

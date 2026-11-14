@@ -125,7 +125,6 @@ export function TodayTab({
           <p className="meta">No urgent deadlines.</p>
         )}
       </div>
-      <button onClick={() => app.setTab("tasks")}>View all tasks</button>
       {snooze && (
         <section className="card" aria-label="Snooze task">
           <h3>Plan “{snooze.title}” for later</h3>

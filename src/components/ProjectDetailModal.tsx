@@ -125,7 +125,7 @@ export function ProjectDetailModal({
         {project.summary ||
           "No short description yet. Add one in Edit project."}
       </p>
-      <div className="actions">
+      <div className="project-detail-toolbar">
         <span className="tags">
           {app.statusLabel(project)} · {todos.filter((todo) => !todo.checked).length}{" "}
           TODOs left

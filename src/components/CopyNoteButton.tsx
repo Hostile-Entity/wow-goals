@@ -16,7 +16,12 @@ export function CopyNoteButton({ title, description }: { title: string; descript
     }
   }
   return <section className="copy-note">
-    <button onClick={() => void copy()} type="button">Copy text</button>
+    <button className="copy-note-button" aria-label="Copy text" title="Copy text" onClick={() => void copy()} type="button">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="8" y="8" width="12" height="13" rx="2" />
+        <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3" />
+      </svg>
+    </button>
     <p className="meta" role="status">{message}</p>
     {fallback && <textarea aria-label="Message to copy" readOnly value={text} rows={5}
       onFocus={event => event.target.select()} />}

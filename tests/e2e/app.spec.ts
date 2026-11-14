@@ -159,6 +159,31 @@ test("task previews count descriptions only, preserve ten lines, and adapt to wr
   expect((await records(page, "tasks")).find((task) => task.id === "task-a").description).toBe(wrappedText);
 });
 
+test("blank-line numbered lists have even spacing and plain web links are clickable", async ({ page }) => {
+  const data = legacyFixture();
+  data.notes[0].description = "1. test\n\n2. test2\n\n3. test 3\n\nhttps://example.com/path and www.example.org";
+  await seedDatabase(page, data);
+  await page.goto("./");
+  await tab(page, "Notes").click();
+  const card = page.locator("#item-note-note-a");
+  const items = card.locator("ol > li");
+  await expect(items).toHaveCount(3);
+  const heights = await items.evaluateAll(elements => elements.map(el => el.getBoundingClientRect().height));
+  const lineHeight = await items.first().evaluate(el => parseFloat(getComputedStyle(el).lineHeight));
+  for (const height of heights) expect(height).toBeCloseTo(lineHeight, 0);
+  const link = card.getByRole("link", { name: "https://example.com/path", exact: true });
+  await expect(link).toHaveAttribute("href", "https://example.com/path");
+  await expect(link).toHaveCSS("text-decoration-line", "underline");
+  await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(card.getByRole("link", { name: "www.example.org", exact: true })).toHaveAttribute("href", "http://www.example.org");
+  await page.route("https://example.com/path", route => route.fulfill({ body: "Linked page", contentType: "text/html" }));
+  const popupPromise = page.waitForEvent("popup");
+  await link.click();
+  const popup = await popupPromise;
+  await expect(popup).toHaveURL("https://example.com/path");
+  await popup.close();
+});
+
 test("description toggles look like plain Edit-colored text in both themes", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   const data = legacyFixture();
@@ -267,20 +292,29 @@ for (const theme of ["light", "wow"]) {
     const convert = editor.locator("section[aria-label='Convert to']");
     await expect(body).toHaveCSS("gap", "0px");
     await expect(body).toHaveCSS("padding", "12px");
+    const initialDescriptionHeight = (await editor.getByRole("textbox", { name: "Description", exact: true }).boundingBox())!.height;
     await expect(convert).toHaveCSS("margin-top", "8px");
     await expect(convert.getByRole("heading")).toHaveCSS("margin-top", "0px");
     const copy = editor.locator(".copy-note");
-    await expect(copy).toHaveCSS("margin-top", "8px");
+    await expect(copy).toHaveCSS("display", "contents");
+    const copyButton = copy.getByRole("button", { name: "Copy text", exact: true });
+    await expect(copyButton).toHaveText("");
+    const copyBox = (await copyButton.boundingBox())!;
+    expect(copyBox.width).toBe(copyBox.height);
+    const hintBox = (await editor.locator(".markdown-hint").boundingBox())!;
+    expect(copyBox.x).toBeGreaterThanOrEqual(hintBox.x + hintBox.width);
+    expect(Math.abs(copyBox.y + copyBox.height / 2 - hintBox.y - hintBox.height / 2)).toBeLessThan(1);
     await copy.getByRole("button", { name: "Copy text" }).click();
     await expect(copy.getByRole("status")).toHaveText("Note copied.");
-    const feedbackGap = await copy.evaluate(element =>
+    await editor.getByRole("heading", { name: "Edit note", exact: true }).hover();
+    await expect.poll(() => copy.evaluate(element =>
       element.querySelector("[role=status]")!.getBoundingClientRect().top -
       element.querySelector("button")!.getBoundingClientRect().bottom,
-    );
-    expect(feedbackGap).toBeCloseTo(6, 0);
+    )).toBeCloseTo(6, 0);
     await expect(editor.locator(".entity-metadata")).toHaveCSS("padding", "0px");
     await expect(editor.locator(".entity-metadata")).toHaveCSS("margin-top", "6px");
-    expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
+    expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
+    expect((await editor.getByRole("textbox", { name: "Description", exact: true }).boundingBox())!.height).toBeCloseTo(initialDescriptionHeight, 0);
     await expect(editor.getByRole("button", { name: "Save", exact: true })).toBeInViewport({ ratio: 1 });
     await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toHaveCSS("min-height", "48px");
     await editor.getByRole("button", { name: "Close", exact: true }).click();
@@ -1108,6 +1142,52 @@ test("phone editor keeps stacked fields, a separate reachable Save bar, and no h
   expect((await records(page, "tasks")).find(t => t.title === "Created from small phone").projectId).toBe("project-a");
 });
 
+test("task editing hides planning, keeps compact actions, and preserves scheduled dates", async ({ page }) => {
+  const data = legacyFixture();
+  await seedDatabase(page, data);
+  await page.goto("./");
+  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  const scheduledFor = (await records(page, "tasks")).find(task => task.id === "task-a").scheduledFor;
+  expect(scheduledFor).toBeTruthy();
+  await expect(page.getByRole("button", { name: "View all tasks", exact: true })).toHaveCount(0);
+  await tab(page, "Tasks").click();
+  await page.locator("#item-task-task-a").getByRole("button", { name: "Edit", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit task", exact: true });
+  await expect(editor.getByLabel("Plan for", { exact: true })).toHaveCount(0);
+  const archive = editor.getByRole("button", { name: "Archive", exact: true });
+  const archiveStyle = await archive.evaluate(el => {
+    const style = getComputedStyle(el);
+    return { height: el.getBoundingClientRect().height, fontSize: style.fontSize, padding: style.padding };
+  });
+  for (const name of ["Done", "Snooze"]) {
+    const button = editor.getByRole("button", { name, exact: true });
+    expect(await button.evaluate(el => {
+      const style = getComputedStyle(el);
+      return { height: el.getBoundingClientRect().height, fontSize: style.fontSize, padding: style.padding };
+    })).toEqual(archiveStyle);
+  }
+  await editor.getByRole("textbox", { name: "Title", exact: true }).fill("Renamed scheduled task");
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  expect((await records(page, "tasks")).find(task => task.id === "task-a").scheduledFor).toBe(scheduledFor);
+});
+
+test("project Edit button is right aligned and vertically centered with status", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 337, height: 800 });
+  await seed(page);
+  await tab(page, "Projects").click();
+  await page.locator("#item-project-project-a").getByRole("button", { name: "Open", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Website project", exact: true });
+  const toolbar = dialog.locator(".project-detail-toolbar");
+  const status = (await toolbar.locator(".tags").boundingBox())!;
+  const edit = (await toolbar.getByRole("button", { name: "Edit project", exact: true }).boundingBox())!;
+  const row = (await toolbar.boundingBox())!;
+  expect(Math.abs(edit.y + edit.height / 2 - status.y - status.height / 2)).toBeLessThan(1);
+  expect(Math.abs(edit.x + edit.width - row.x - row.width)).toBeLessThan(1);
+  expect(edit.x).toBeGreaterThanOrEqual(status.x + status.width);
+});
+
 test("project and goal detail popups use the full-height editor layout", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 780 });
   await seed(page);
@@ -1146,7 +1226,7 @@ test("note description grows with the viewport while title and actions stay visi
     await expect.poll(() => editor.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(height);
     await expect(description).toBeInViewport({ ratio: 1 });
     await expect(editor.getByRole("textbox", { name: "Title", exact: true })).toBeInViewport({ ratio: 1 });
-    for (const name of ["Task", "Project", "Other types", "Copy text", "Archive", "Delete", "Save"]) {
+    for (const name of ["Task", "Project", "Goal", "Routine", "Copy text", "Archive", "Delete", "Save"]) {
       await expect(editor.getByRole("button", { name, exact: true })).toBeInViewport({ ratio: 1 });
     }
     heights.push((await description.boundingBox())!.height);
@@ -1154,8 +1234,24 @@ test("note description grows with the viewport while title and actions stay visi
   }
   expect(heights[0]).toBeGreaterThan(96);
   expect(heights[1] - heights[0]).toBeCloseTo(200, 0);
-  await editor.getByRole("button", { name: "Other types", exact: true }).click();
-  await expect(editor.getByRole("button", { name: "Routine", exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(editor.getByRole("button", { name: "Other types", exact: true })).toHaveCount(0);
+  await expect(description).toHaveCSS("resize", "vertical");
+  await description.scrollIntoViewIfNeeded();
+  if (!test.info().project.use.isMobile) {
+    const box = (await description.boundingBox())!;
+    await page.mouse.move(box.x + box.width - 4, box.y + box.height - 4);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width - 4, box.y + box.height + 160, { steps: 10 });
+    await page.mouse.up();
+    expect((await description.boundingBox())!.height).toBeGreaterThan(box.height + 100);
+  }
+  await description.evaluate(el => { el.style.height = "1000px"; });
+  expect(await editor.locator(".modal-body").evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(0);
+  expect((await description.boundingBox())!.height).toBeGreaterThanOrEqual(1000);
+  const bodyBox = (await editor.locator(".modal-body").boundingBox())!;
+  await page.mouse.move(bodyBox.x + 3, bodyBox.y + 30);
+  await page.mouse.wheel(0, 250);
+  await expect.poll(() => editor.locator(".modal-body").evaluate(el => el.scrollTop)).toBeGreaterThan(0);
   await page.setViewportSize({ width: 320, height: 420 });
   await expect(editor.getByRole("button", { name: "Save", exact: true })).toBeInViewport({ ratio: 1 });
   await editor.getByRole("button", { name: "Delete", exact: true }).scrollIntoViewIfNeeded();

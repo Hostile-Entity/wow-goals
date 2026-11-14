@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useId, useRef, useState } from "react";
 import {
   AppData,
   GoalDraft,
@@ -14,6 +14,7 @@ import { uid } from "../db";
 import { CopyNoteButton } from "./CopyNoteButton";
 import { ConversionContext, ConversionNotice } from "./ConversionNotice";
 import { EntityMetadata } from "./EntityMetadata";
+import { useNoteDescriptionSize } from "./useNoteDescriptionSize";
 
 interface Props {
   mode: "create" | "edit";
@@ -57,11 +58,14 @@ export function EntityEditorModal({
   const [title, setTitle] = useState(entity?.title ?? "");
   const [revision] = useState(entity?.updatedAt);
   const [description, setDescription] = useState(entity?.description ?? "");
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const descriptionId = useId();
+  useNoteDescriptionSize(descriptionRef, type === "note");
   const [summary, setSummary] = useState(
     (entity as Project | undefined)?.summary ?? "",
   );
   const [deadline, setDeadline] = useState(task?.deadline ?? "");
-  const [scheduledFor, setScheduledFor] = useState(task?.scheduledFor ?? "");
+  const [scheduledFor] = useState(task?.scheduledFor ?? "");
   const [goalId, setGoalId] = useState(task?.goalId ?? "");
   const [projectId, setProjectId] = useState(task?.projectId ?? "");
   const [priority, setPriority] = useState(task?.priority ?? 2);
@@ -75,7 +79,6 @@ export function EntityEditorModal({
   const [primary, setPrimary] = useState(
     goal?.primaryMetricId ?? metrics[0]?.id ?? "",
   );
-  const [advancedTriage, setAdvancedTriage] = useState(false);
   const [initial] = useState(() =>
     JSON.stringify({
       title,
@@ -211,11 +214,13 @@ export function EntityEditorModal({
               />
             </label>
           )}
-          <label className="inline-select editor-description">
-            <span className="field-label" id={type === "note" ? "note-description-label" : undefined}>
+          <div className="inline-select editor-description">
+            <label htmlFor={descriptionId} className="field-label" id={type === "note" ? "note-description-label" : undefined}>
               {type === "project" ? "TODO source" : "Description"}
-            </span>
+            </label>
             <textarea
+              id={descriptionId}
+              ref={descriptionRef}
               aria-labelledby={type === "note" ? "note-description-label" : undefined}
               aria-describedby={type === "note" ? "note-markdown-hint" : undefined}
               value={description}
@@ -228,11 +233,14 @@ export function EntityEditorModal({
               }
             />
             {type === "note" && (
-              <span id="note-markdown-hint" className="meta markdown-hint">
-                Markdown: **bold**, *italic*, lists, [link](url), `code`.
-              </span>
+              <div className="note-description-tools">
+                <span id="note-markdown-hint" className="meta markdown-hint">
+                  Markdown: **bold**, *italic*, lists, [link](url), `code`.
+                </span>
+                {mode === "edit" && <CopyNoteButton title={title} description={description} />}
+              </div>
             )}
-          </label>
+          </div>
           {type === "project" && (
             <p className="meta">
                Each non-empty line is a TODO. Your short description is separate.
@@ -252,14 +260,6 @@ export function EntityEditorModal({
           )}
           {type === "task" && (
             <>
-              <label className="inline-select">
-                <span className="field-label">Plan for</span>
-                <input
-                  type="date"
-                  value={scheduledFor}
-                  onChange={(e) => setScheduledFor(e.target.value)}
-                />
-              </label>
               <label className="inline-select">
                 <span className="field-label">Priority</span>
                 <select
@@ -478,27 +478,17 @@ export function EntityEditorModal({
                   Project
                 </button>
                 <button
-                  disabled={action.pending}
-                  onClick={() => setAdvancedTriage(!advancedTriage)}
+                  disabled={action.pending || !title.trim()}
+                  onClick={() => triage("goal")}
                 >
-                  Other types
+                  Goal
                 </button>
-                {advancedTriage && (
-                  <>
-                    <button
-                      disabled={action.pending}
-                      onClick={() => triage("goal")}
-                    >
-                      Goal
-                    </button>
-                    <button
-                      disabled={action.pending}
-                      onClick={() => triage("routine")}
-                    >
-                      Routine
-                    </button>
-                  </>
-                )}
+                <button
+                  disabled={action.pending || !title.trim()}
+                  onClick={() => triage("routine")}
+                >
+                  Routine
+                </button>
               </div>
             </>
           )}
@@ -506,7 +496,6 @@ export function EntityEditorModal({
       )}
       {mode === "edit" && entity && (
         <>
-          {type === "note" && <CopyNoteButton title={title} description={description} />}
           {type === "task" && (
             <div className="actions task-editor-actions">
               <button
@@ -523,13 +512,14 @@ export function EntityEditorModal({
                 Done
               </button>
               <button
+                title="Snooze until tomorrow"
                 disabled={action.pending}
                 onClick={() => {
                   if (guard())
                     void action.run(() => app.postponeTask(entity.id), close);
                 }}
               >
-                Snooze until tomorrow
+                Snooze
               </button>
               <button
                 disabled={action.pending}
