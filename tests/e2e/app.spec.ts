@@ -1423,19 +1423,22 @@ test("Today shows its controls without instructional paragraphs", async ({ page 
 
 test("buttons are shorter while card action widths and form input heights stay unchanged", async ({ page }) => {
   await seed(page);
+  // Mobile viewport transforms can introduce tiny floating-point differences.
   for (const name of ["Search all items", "Open app settings"]) {
-    expect((await page.getByRole("button", { name, exact: true }).boundingBox())!.height).toBe(36);
+    expect((await page.getByRole("button", { name, exact: true }).boundingBox())!.height).toBeCloseTo(36);
   }
   await tab(page, "Notes").click();
   const edit = page.locator("#item-note-note-a").getByRole("button", { name: "Edit", exact: true });
-  expect(await edit.boundingBox()).toMatchObject({ width: 64, height: 36 });
+  const editBounds = (await edit.boundingBox())!;
+  expect(editBounds.width).toBeCloseTo(64);
+  expect(editBounds.height).toBeCloseTo(36);
   const add = page.getByRole("button", { name: "Add", exact: true });
-  expect((await add.boundingBox())!.height).toBe(40);
+  expect((await add.boundingBox())!.height).toBeCloseTo(40);
   await expect(page.getByRole("textbox", { name: "Add a note...", exact: true })).toHaveCSS("min-height", "44px");
   await edit.click();
   const editor = page.getByRole("dialog");
-  expect((await editor.getByRole("button", { name: "Close", exact: true }).boundingBox())!.height).toBe(36);
-  expect((await editor.getByRole("button", { name: "Save", exact: true }).boundingBox())!.height).toBe(40);
-  expect((await editor.getByRole("textbox", { name: "Title", exact: true }).boundingBox())!.height).toBe(48);
-  expect((await editor.getByRole("button", { name: "Task", exact: true }).boundingBox())!.height).toBe(36);
+  expect((await editor.getByRole("button", { name: "Close", exact: true }).boundingBox())!.height).toBeCloseTo(36);
+  expect((await editor.getByRole("button", { name: "Save", exact: true }).boundingBox())!.height).toBeCloseTo(40);
+  expect((await editor.getByRole("textbox", { name: "Title", exact: true }).boundingBox())!.height).toBeCloseTo(48);
+  expect((await editor.getByRole("button", { name: "Task", exact: true }).boundingBox())!.height).toBeCloseTo(36);
 });
