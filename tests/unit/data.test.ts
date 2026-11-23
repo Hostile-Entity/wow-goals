@@ -19,7 +19,6 @@ import {
   triageCommand,
   undoTriageCommand,
   updateCommand,
-  undoTaskCompletionCommand,
 } from "../../src/state/commands";
 import { filterLabel, filterOptions, sortTasks, statusLabel } from "../../src/state/lifecycle";
 import { changeTodo, projectTodos } from "../../src/state/projectTodos";
@@ -339,18 +338,17 @@ describe("selected core flows", () => {
     expect(statusLabel("reference")).toBe("Pinned");
     expect(statusLabel("enabled")).toBe("On");
   });
-  it("completion Undo restores in-progress status and removes only its own history entry", () => {
+  it("records task completion once and preserves older history", () => {
     const before = migrated();
     const task = before.tasks.find(t => t.status === "doing")!;
     const completed = applyChanges(before, completeTaskCommand(recordSet(before), task.id, "2026-11-12"));
-    const completion = completed.completions.find(c => c.entityId === task.id && c.date === "2026-11-12")!;
-    const revision = completed.tasks.find(t => t.id === task.id)!.updatedAt;
-    const changes = undoTaskCompletionCommand(recordSet(completed), task.id, revision, completion.id, "doing", "2026-11-12");
-    const undone = applyChanges(completed, changes);
-    expect(undone.tasks.find(t => t.id === task.id)?.status).toBe("doing");
-    expect(undone.completions).toEqual(before.completions);
-    completed.tasks.find(t => t.id === task.id)!.updatedAt = "2099-01-01T00:00:00Z";
-    expect(() => undoTaskCompletionCommand(recordSet(completed), task.id, revision, completion.id, "doing", "2026-11-12")).toThrow("kept safe");
+    expect(completed.tasks.find(t => t.id === task.id)?.status).toBe("done");
+    expect(completed.completions).toHaveLength(before.completions.length + 1);
+    expect(completed.completions).toEqual(expect.arrayContaining([
+      ...before.completions,
+      expect.objectContaining({ entityType: "task", entityId: task.id, date: "2026-11-12" }),
+    ]));
+    expect(completeTaskCommand(recordSet(completed), task.id, "2026-11-12")).toEqual([]);
   });
   it("keeps original blank lines and prose TODOs intact until edited", () => {
     const source = legacyFixture().projects[0].description;

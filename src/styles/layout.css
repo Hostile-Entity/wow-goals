@@ -219,7 +219,7 @@ h3 {
 
 /* A wider canvas on desktop; the same five destinations remain unchanged. */
 .main { display: block; padding: 0 20px calc(var(--tabs-height) + 20px); }
-.main > .action-error, .main > .app-notice { margin-bottom: var(--space-section); }
+.main > .action-error { margin-bottom: var(--space-section); }
 .sticky-head { top: 0; padding: 8px 20px; margin: 0 -20px var(--space-section); }
 h2 { font-size: 1.5rem; letter-spacing: -.035em; margin-bottom: var(--space-section); }
 h3 { font-size: 1rem; margin: var(--space-section) 0 var(--space-heading); }

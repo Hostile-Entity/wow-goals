@@ -5,8 +5,8 @@ WowGoals is a mobile-first, local-only personal execution PWA: capture notes →
 ## Current behavior
 
 - **Notes:** Inbox / Pinned / Archived, basic Markdown descriptions, expandable ten-line previews, Copy text with a clipboard fallback, and conversion with safe Undo.
-- **Tasks:** To do / Active / Completed / Archived, named priorities, deadlines independent of planned dates, direct completion with Undo, expandable descriptions.
-- **Today:** three pinned focus tasks, other due work without duplicate rows, snooze with Undo and daily routine check-ins. Urgent work remains visible despite snooze or archived projects.
+- **Tasks:** To do / Active / Completed / Archived, visible High / Normal / Low priorities, deadlines independent of planned dates, direct completion, expandable descriptions.
+- **Today:** three pinned focus tasks, other due work without duplicate rows, snooze and daily routine check-ins. Urgent work remains visible despite snooze or archived projects.
 - **Projects:** compact summary/count cards; detail popup with the original newline-based checklist, completed items and separate linked Tasks; Complete/Reopen without cascading changes.
 - **Goals:** Active / Completed / Archived, primary metric on cards, quick value updates, full metrics/charts and linked work in details.
 - **Routines:** On / Completed today / Archived views. Daily completion resets at the configured day boundary without removing history.

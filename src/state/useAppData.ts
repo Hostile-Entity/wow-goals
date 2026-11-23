@@ -39,7 +39,6 @@ import {
   projectTodoCommand,
   triageCommand,
   undoTriageCommand,
-  undoTaskCompletionCommand,
   updateCommand,
 } from "./commands";
 import {
@@ -147,8 +146,6 @@ export function useAppData() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(0);
-  const [message, setMessage] = useState("");
-  const [undo, setUndo] = useState<null | (() => Promise<void>)>(null);
   const [tab, setTab] = useState<Tab>("today");
   const [moreTab, setMoreTab] = useState<MoreTab>("review");
   const [filters, setFilters] = useState(savedFilters);
@@ -279,10 +276,6 @@ export function useAppData() {
       setBusy((value) => value - 1);
     }
   }
-  function notify(text: string, action?: () => Promise<void>) {
-    setMessage(text);
-    setUndo(action ? () => action : null);
-  }
   async function updateEntity(
     type: EntityType,
     id: string,
@@ -375,9 +368,6 @@ export function useAppData() {
     const changes = await mutate(["notes", entityStores[to]], (records) =>
       triageCommand(records, note, to, logicalDay),
     );
-    notify(`Note converted to ${to}.`, () =>
-      undoTriage(note.id),
-    );
     const destination = changes.find(change => change.store === entityStores[to] && "row" in change);
     if (!destination || !("row" in destination)) throw new Error("Conversion result unavailable.");
     return destination.row.id;
@@ -393,31 +383,15 @@ export function useAppData() {
       setReveal(null);
       setFilters(current => ({ ...current, notes: status }));
     }
-    notify("Conversion undone. Your edited note was kept.");
   }
   async function completeTask(id: string) {
-    let previousStatus: ItemStatus = "open";
-    const changes = await mutate(["tasks", "completions"], (records) => {
-      previousStatus = findEntity(records, "task", id).status;
-      return completeTaskCommand(records, id, logicalDay);
-    });
-    const taskChange = changes.find(c => c.store === "tasks" && "row" in c);
-    const completion = changes.find(c => c.store === "completions" && "row" in c);
-    if (taskChange && "row" in taskChange && "updatedAt" in taskChange.row && completion && "row" in completion) {
-      const revision = taskChange.row.updatedAt;
-      const completionId = completion.row.id;
-      notify("Task completed.", async () => {
-        await mutate(["tasks", "completions"], records =>
-          undoTaskCompletionCommand(records, id, revision, completionId, previousStatus, logicalDay));
-        notify("Task completion undone.");
-      });
-    }
+    await mutate(["tasks", "completions"], (records) =>
+      completeTaskCommand(records, id, logicalDay),
+    );
   }
   async function postponeTask(id: string, until = addDays(logicalDay, 1)) {
-    let previous: Task;
-    await mutate(["tasks"], (records) => {
-      previous = findEntity(records, "task", id) as Task;
-      return updateCommand(
+    await mutate(["tasks"], (records) =>
+      updateCommand(
         records,
         "task",
         id,
@@ -428,23 +402,8 @@ export function useAppData() {
           postponedCount: task.postponedCount + 1,
         }),
         logicalDay,
-      );
-    });
-    notify(`Scheduled for ${until}. Deadline unchanged.`, async () => {
-      await updateEntity("task", id, (task: Task) => {
-        if (task.scheduledFor !== until)
-          throw new Error(
-            "The schedule has since changed; it was not overwritten.",
-          );
-        return {
-          ...task,
-          scheduledFor: previous.scheduledFor,
-          postponedCount: previous.postponedCount,
-          lastPostponedAt: previous.lastPostponedAt,
-        };
-      });
-      notify("Schedule restored.");
-    });
+      ),
+    );
   }
   async function toggleFocus(id: string) {
     await mutate(["settings", "tasks"], (records) => {
@@ -725,7 +684,6 @@ export function useAppData() {
       await replaceSnapshot(await openDb(), data);
       await reloadAll();
       channelRef.current?.postMessage("changed");
-      notify("Backup restored successfully.");
       return true;
     } catch (error) {
       const message = `Import failed; your existing data was not replaced. ${error instanceof Error ? error.message : "Invalid file."}`;
@@ -783,10 +741,6 @@ export function useAppData() {
     error,
     setError,
     busy: busy > 0,
-    message,
-    setMessage,
-    undo,
-    notify,
     reloadAll,
     tab,
     setTab,

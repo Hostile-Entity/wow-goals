@@ -11,12 +11,12 @@ const BASE_VOLUMES: Record<SoundKey, number> = {
   tabClick: 0.5,
   uiClick: 0.5,
 };
+const ATTACK_SECONDS = 0.004;
 
 let sfxMaster = 0;
 let audioContext: AudioContext | null = null;
 const buffers = new Map<SoundKey, AudioBuffer>();
 const loading = new Map<SoundKey, Promise<AudioBuffer>>();
-let primePromise: Promise<void> | null = null;
 
 function clamp01(v: number): number {
   return Math.max(0, Math.min(1, v));
@@ -27,6 +27,15 @@ function getAudioContext(): AudioContext | null {
   if (audioContext) return audioContext;
   const Ctor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return null;
+  try {
+    const { audioSession } = window.navigator as Navigator & {
+      audioSession?: { type: string };
+    };
+    // Let short UI sounds mix with music instead of asking for exclusive audio.
+    if (audioSession) audioSession.type = "ambient";
+  } catch {
+    // Audio should still work in browsers that don't accept this session type.
+  }
   audioContext = new Ctor();
   return audioContext;
 }
@@ -74,6 +83,7 @@ async function ensureResumed(): Promise<AudioContext | null> {
 }
 
 async function playSound(key: SoundKey): Promise<void> {
+  if (sfxMaster === 0 || typeof document === "undefined" || document.hidden) return;
   const ctx = await ensureResumed();
   if (!ctx) return;
 
@@ -83,31 +93,27 @@ async function playSound(key: SoundKey): Promise<void> {
   } catch {
     return;
   }
+  if (sfxMaster === 0 || document.hidden) return;
 
   const source = ctx.createBufferSource();
   source.buffer = buffer;
 
   const gain = ctx.createGain();
-  gain.gain.value = clamp01(BASE_VOLUMES[key] * sfxMaster);
+  const start = ctx.currentTime;
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(
+    clamp01(BASE_VOLUMES[key] * sfxMaster),
+    start + ATTACK_SECONDS,
+  );
 
   source.connect(gain);
   gain.connect(ctx.destination);
 
   try {
-    source.start(0);
+    source.start(start);
   } catch {
     // no-op
   }
-}
-
-export function primeAudio(): Promise<void> {
-  if (primePromise) return primePromise;
-  primePromise = (async () => {
-    const ctx = await ensureResumed();
-    if (!ctx) return;
-    await Promise.all([loadBuffer("tabClick"), loadBuffer("uiClick")]);
-  })();
-  return primePromise;
 }
 
 export function playTabClickSound(): void {

@@ -2,7 +2,6 @@ import { RefObject, useEffect, useState } from "react";
 import {
   playTabClickSound,
   playUiClickSound,
-  primeAudio,
   setSfxMasterVolume01,
 } from "../audio/soundManager";
 
@@ -69,10 +68,6 @@ export function useDeviceUI(
     setSfxMasterVolume01(soundVolume / 100);
   }, [soundVolume]);
   useEffect(() => {
-    const prime = () => {
-      void primeAudio().catch(() => undefined);
-      document.removeEventListener("pointerdown", prime);
-    };
     const click = (event: MouseEvent) => {
       const target = (event.target as HTMLElement)?.closest<HTMLElement>(
         "button, [role=button], a",
@@ -82,10 +77,8 @@ export function useDeviceUI(
       if (target.closest(".tabs,.more-tabs")) playTabClickSound();
       else playUiClickSound();
     };
-    document.addEventListener("pointerdown", prime);
     document.addEventListener("click", click);
     return () => {
-      document.removeEventListener("pointerdown", prime);
       document.removeEventListener("click", click);
     };
   }, []);

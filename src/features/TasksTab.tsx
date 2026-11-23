@@ -82,7 +82,7 @@ export function TasksTab({
                 ) : null}
                 <div className="tags entity-summary entity-footer-meta">
                   {[
-                    task.priority !== 2 && priorityLabel(task.priority),
+                    priorityLabel(task.priority),
                     task.deadline && formatDueLabel(task.deadline, logicalDay),
                     task.scheduledFor && `Planned for ${task.scheduledFor}`,
                     task.projectId && (projectById.get(task.projectId) ?? "Unknown project"),

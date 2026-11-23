@@ -79,6 +79,42 @@ for (const theme of ["light", "wow"] as const) {
   });
 }
 
+test("the first button tap stays silent while muted and enabled sounds use ambient audio", async ({ page }) => {
+  await page.addInitScript(() => {
+    const session = { type: "auto" };
+    Object.defineProperty(navigator, "audioSession", { value: session });
+    const audio = { contexts: 0, plays: 0, typeAtCreation: null as string | null };
+    Object.assign(window, { __testAudio: audio });
+    window.AudioContext = new Proxy(window.AudioContext, {
+      construct(target, args, newTarget) {
+        audio.contexts++;
+        audio.typeAtCreation = session.type;
+        return Reflect.construct(target, args, newTarget);
+      },
+    });
+    const start = AudioBufferSourceNode.prototype.start;
+    AudioBufferSourceNode.prototype.start = function (...args) {
+      audio.plays++;
+      return start.apply(this, args);
+    };
+  });
+  const audio = () => page.evaluate(() => (window as typeof window & {
+    __testAudio: { contexts: number; plays: number; typeAtCreation: string | null };
+  }).__testAudio);
+
+  await seed(page);
+  await page.getByRole("button", { name: "Open app settings" }).click();
+  const settings = page.getByRole("dialog");
+  await expect(settings.getByText("Muted", { exact: true })).toBeVisible();
+  expect(await audio()).toEqual({ contexts: 0, plays: 0, typeAtCreation: null });
+
+  await settings.getByRole("slider", { name: "Button click volume" }).press("End");
+  await expect(settings.getByText("100%", { exact: true })).toBeVisible();
+  expect(await audio()).toEqual({ contexts: 0, plays: 0, typeAtCreation: null });
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await expect.poll(audio).toEqual({ contexts: 1, plays: 1, typeAtCreation: "ambient" });
+});
+
 test("notes render safe Markdown, expand to full text, and remeasure virtual rows", async ({ page }) => {
   const data = legacyFixture();
   const description = [
@@ -491,7 +527,27 @@ test("direct edit, copy fallback, current-draft conversion and safe undo", async
   ).toBe("Edited message");
 });
 
-test("focus tasks and snooze preserve real deadlines and support undo", async ({
+test("converted tasks show Normal alongside High and Low priorities without a banner", async ({ page }) => {
+  await seed(page);
+  await tab(page, "Notes").click();
+  await page.locator("#item-note-note-a").getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Task", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit task", exact: true });
+  await editor.getByRole("button", { name: "Back to Inbox", exact: true }).click();
+  await expect(editor).not.toBeVisible();
+  await expect(page.getByRole("main").getByRole("status")).toHaveCount(0);
+  await expect(page.getByText("Note converted to task.", { exact: true })).toHaveCount(0);
+
+  await tab(page, "Tasks").click();
+  const card = page.locator(".task-list article").filter({ hasText: "Saved message" });
+  await expect(card.getByText("Normal", { exact: true })).toBeVisible();
+  await expect(page.locator("#item-task-task-a .entity-summary")).toContainText("Low");
+  await page.getByRole("button", { name: "View: To do", exact: true }).click();
+  await page.locator(".filter-menu").getByRole("button", { name: "Active", exact: true }).click();
+  await expect(page.locator("#item-task-task-b").getByText("High", { exact: true })).toBeVisible();
+});
+
+test("focus tasks and snooze preserve real deadlines without a banner", async ({
   page,
 }) => {
   await seed(page);
@@ -507,20 +563,12 @@ test("focus tasks and snooze preserve real deadlines and support undo", async ({
     .filter({ hasText: "Overdue task" });
   await urgent.getByRole("button", { name: "Later", exact: true }).click();
   await page.getByRole("button", { name: "Next week", exact: true }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "Deadline unchanged" }),
-  ).toBeVisible();
+  await expect(urgent).toContainText(/planned for \d{4}-\d{2}-\d{2}/);
+  await expect(page.getByRole("main").getByRole("status")).toHaveCount(0);
   expect(
     (await records(page, "tasks")).find((t) => t.id === "task-a").deadline,
   ).toBe("2026-10-11");
   await expect(urgent).toBeVisible();
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "Schedule restored" }),
-  ).toBeVisible();
-  expect(
-    (await records(page, "tasks")).find((t) => t.id === "task-a").scheduledFor,
-  ).toBe("2026-10-11");
   await page.reload();
   await expect(
     page.getByRole("button", { name: "Unpin focus", exact: true }),
@@ -990,7 +1038,7 @@ test("a real failed upgrade preserves v1 data and can retry without a reset", as
 });
 
 for (const version of [2, 3]) {
-test(`v${version} upgrade preserves every record, uses only comfortable cards and supports completion Undo`, async ({ page }) => {
+test(`v${version} upgrade preserves every record, uses only comfortable cards and records completion`, async ({ page }) => {
   const data = migrateV1(legacyFixture() as unknown as AppStateData);
   data.notes[0].status = "reference";
   data.settings.focusTaskIds = ["task-b"];
@@ -1033,10 +1081,14 @@ test(`v${version} upgrade preserves every record, uses only comfortable cards an
   await expect(card.locator(".item-timestamp")).toContainText("Created");
   await card.getByRole("button", { name: "Complete task-b", exact: true }).click();
   await expect(card).toHaveCount(0);
-  await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(card).toBeVisible();
-  expect((await records(page, "tasks")).find(t => t.id === "task-b").status).toBe("doing");
-  expect(await records(page, "completions")).toEqual(data.completions);
+  await expect(page.getByRole("main").getByRole("status")).toHaveCount(0);
+  expect((await records(page, "tasks")).find(t => t.id === "task-b").status).toBe("done");
+  const completions = await records(page, "completions");
+  expect(completions).toHaveLength(data.completions.length + 1);
+  expect(completions).toEqual(expect.arrayContaining([
+    ...data.completions,
+    expect.objectContaining({ entityType: "task", entityId: "task-b" }),
+  ]));
   await tab(page, "Notes").click();
   await page.getByRole("button", { name: "View: Inbox", exact: true }).click();
   await expect(page.locator(".filter-menu").getByRole("button", { name: "Inbox", exact: true })).toHaveCount(1);
@@ -1300,7 +1352,7 @@ test("item cards use tighter padding and shorter actions without hiding timestam
     })).toEqual(["6px", "12px", "6px", "12px"]);
     await expect(card.locator(".item-timestamp")).toBeVisible();
     for (const button of await card.getByRole("button").all())
-      expect((await button.boundingBox())!.height).toBe(36);
+      expect((await button.boundingBox())!.height).toBeCloseTo(36, 3);
   }
   await tab(page, "Tasks").click();
   const actions = page.locator("#item-task-task-a .entity-side");

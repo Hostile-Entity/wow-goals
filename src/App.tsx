@@ -534,20 +534,6 @@ function App() {
                 <button onClick={() => app.setError("")}>Dismiss</button>
               </div>
             )}
-            {app.message && (
-              <div className="app-notice" role="status">
-                {app.message}
-                {app.undo && (
-                  <button
-                    disabled={app.busy}
-                    onClick={() => void app.undo?.().catch(() => undefined)}
-                  >
-                    Undo
-                  </button>
-                )}
-                <button onClick={() => app.setMessage("")}>Dismiss</button>
-              </div>
-            )}
             {app.tab === "notes" && (
               <section>
                 <div className="section-head sticky-head">
