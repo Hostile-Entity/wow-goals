@@ -35,6 +35,8 @@ npm audit
 
 Browser tests serve the production build on loopback port 4173 under the GitHub Pages base path (`PLAYWRIGHT_PORT=4183 npm run test:e2e` selects another port). They use isolated test data, not your installed app's database. Service workers register only in production builds.
 
+`npm run release:check` runs a locked install, a fresh type-check/build, unit tests, and desktop/mobile Chromium tests. Deployment runs this gate automatically; install the Playwright Chromium binary first. See [startup measurements](docs/startup-performance.md) for the benchmark and the remaining physical-device checks.
+
 ## Organization
 
 - `src/App.tsx`: screen/dialog orchestration.

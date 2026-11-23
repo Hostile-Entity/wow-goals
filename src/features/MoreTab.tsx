@@ -1,14 +1,15 @@
-import { ReactNode, useMemo } from "react";
+import { lazy, ReactNode, Suspense, useMemo } from "react";
 import {
   AppData,
   FilterKey,
   MoreTab as MoreTabId,
   getStatusBucket,
 } from "../state/useAppData";
-import { ReviewTab } from "./ReviewTab";
 import { EntityType, Goal, Routine } from "../types";
 import { isOpen } from "../state/lifecycle";
 import { ItemTimestamp } from "../components/ItemTimestamp";
+
+const ReviewTab = lazy(() => import("./ReviewTab").then(({ ReviewTab }) => ({ default: ReviewTab })));
 
 interface MoreTabProps {
   notes: AppData["state"]["notes"];
@@ -24,6 +25,7 @@ interface MoreTabProps {
   routines: AppData["state"]["routines"];
   completions: AppData["state"]["completions"];
   reviews: AppData["state"]["reviews"];
+  reviewReady: boolean;
   logs: AppData["state"]["logs"];
   logicalDay: AppData["logicalDay"];
   dayStartHour: AppData["dayStartHour"];
@@ -31,14 +33,7 @@ interface MoreTabProps {
   onCreateRoutine(): void;
   onCreateGoal(): void;
   primaryMetric: AppData["primaryMetric"];
-  saveWeeklyReview(input: {
-    weekKey: string;
-    goalsChecked: boolean;
-    inboxCleared: boolean;
-    tasksPrioritized: boolean;
-    weekPlanned: boolean;
-    note: string;
-  }): Promise<void>;
+  weeklyReviewDrafts: AppData["weeklyReviewDrafts"];
   toggleRoutineCompletionForDay(routineId: string, day: string): Promise<void>;
   renderFilterControl(key: FilterKey): ReactNode;
   onManageRoutine(routine: Routine): void;
@@ -59,6 +54,7 @@ export function MoreTab({
   routines,
   completions,
   reviews,
+  reviewReady,
   logs,
   logicalDay,
   dayStartHour,
@@ -66,7 +62,7 @@ export function MoreTab({
   onCreateRoutine,
   onCreateGoal,
   primaryMetric,
-  saveWeeklyReview,
+  weeklyReviewDrafts,
   toggleRoutineCompletionForDay,
   renderFilterControl,
   onManageRoutine,
@@ -265,20 +261,24 @@ export function MoreTab({
       {moreTab === "review" && (
         <>
           <h3>Weekly Review</h3>
-          <ReviewTab
-            notes={notes}
-            tasks={tasks}
-            onOpen={onOpen}
-            logicalDay={logicalDay}
-            dayStartHour={dayStartHour}
-            projects={projects}
-            routines={routines}
-            completions={completions}
-            reviews={reviews}
-            logs={logs}
-            saveWeeklyReview={saveWeeklyReview}
-            toggleRoutineCompletionForDay={toggleRoutineCompletionForDay}
-          />
+          <Suspense fallback={<p className="meta" role="status">Loading review…</p>}>
+            {reviewReady ? (
+              <ReviewTab
+                notes={notes}
+                tasks={tasks}
+                onOpen={onOpen}
+                logicalDay={logicalDay}
+                dayStartHour={dayStartHour}
+                projects={projects}
+                routines={routines}
+                completions={completions}
+                reviews={reviews}
+                logs={logs}
+                weeklyReviewDrafts={weeklyReviewDrafts}
+                toggleRoutineCompletionForDay={toggleRoutineCompletionForDay}
+              />
+            ) : <p className="meta" role="status">Loading review history…</p>}
+          </Suspense>
         </>
       )}
     </section>

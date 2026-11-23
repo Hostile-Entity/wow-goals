@@ -1,13 +1,7 @@
 import { RefObject } from "react";
 import { EntityType } from "../types";
 
-export interface SearchResultItem {
-  id: string;
-  type: EntityType;
-  title: string;
-  description: string;
-  matchedField: "title" | "description";
-}
+import { SearchResultItem } from "../state/search";
 
 interface SearchTabProps {
   query: string;

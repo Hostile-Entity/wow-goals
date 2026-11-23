@@ -10,7 +10,9 @@ function workerVersion(worker: ServiceWorker): Promise<string> {
     channel.port1.onmessage = (event) => {
       clearTimeout(timer);
       channel.port1.close();
-      resolve(event.data?.version ? `v${event.data.version}` : "unknown");
+      const { version, appVersion } = event.data ?? {};
+      resolve(typeof appVersion === "string" ? `v${appVersion}`
+        : typeof version === "number" ? `v${version}` : version || "unknown");
     };
     worker.postMessage({ type: "GET_VERSION" }, [channel.port2]);
   });

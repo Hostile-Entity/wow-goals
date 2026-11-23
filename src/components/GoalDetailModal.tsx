@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { AppData } from "../state/useAppData";
 import { EntityType, Goal } from "../types";
 import { isOpen } from "../state/lifecycle";
 import { Dialog } from "./Dialog";
 import { EntityActions } from "./EntityActions";
-import { GoalMetricChartsModal } from "./GoalMetricChartsModal";
 import { useAction } from "./useAction";
 import { ConversionContext, ConversionNotice } from "./ConversionNotice";
 import { EntityMetadata } from "./EntityMetadata";
+
+const GoalMetricChartsModal = lazy(() => import("./GoalMetricChartsModal")
+  .then(({ GoalMetricChartsModal }) => ({ default: GoalMetricChartsModal })));
 
 export function GoalDetailModal({
   goal,
@@ -25,6 +27,12 @@ export function GoalDetailModal({
   conversion?: ConversionContext;
 }) {
   const [charts, setCharts] = useState(false);
+  const { setWantsChartHistory } = app;
+  useEffect(() => {
+    if (!charts) return;
+    setWantsChartHistory(true);
+    return () => setWantsChartHistory(false);
+  }, [charts, setWantsChartHistory]);
   const [value, setValue] = useState(String(app.primaryMetric(goal).current));
   const action = useAction();
   const primary = app.primaryMetric(goal);
@@ -130,13 +138,16 @@ export function GoalDetailModal({
       </details>
       <EntityActions type="goal" entity={goal} app={app} beforeAction={guard} />
       <EntityMetadata entity={goal} />
-      {charts && (
-        <GoalMetricChartsModal
-          goal={goal}
-          logs={app.state.logs}
-          dayStartHour={app.dayStartHour}
-          close={() => setCharts(false)}
-        />
+      {charts && !app.logsReady && <p className="meta" role="status">Loading chart history…</p>}
+      {charts && app.logsReady && (
+        <Suspense fallback={<p className="meta" role="status">Loading charts…</p>}>
+          <GoalMetricChartsModal
+            goal={goal}
+            logs={app.state.logs}
+            dayStartHour={app.dayStartHour}
+            close={() => setCharts(false)}
+          />
+        </Suspense>
       )}
     </Dialog>
   );

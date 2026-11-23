@@ -15,9 +15,7 @@ export function TodayTab({
   const [until, setUntil] = useState("");
   const action = useAction();
   function row(task: Task) {
-    const project = app.state.projects.find(
-      (project) => project.id === task.projectId,
-    );
+    const project = task.projectId ? app.projectById.get(task.projectId) : undefined;
     return (
       <article className="card today-task-card" key={task.id}>
         <div className="today-task-main">
@@ -187,12 +185,7 @@ export function TodayTab({
         {app.state.routines
           .filter((routine) => routine.status === "enabled")
           .map((routine) => {
-            const complete = app.state.completions.some(
-              (c) =>
-                c.entityType === "routine" &&
-                c.entityId === routine.id &&
-                c.date === app.logicalDay,
-            );
+            const complete = app.isRoutineCompletedToday(routine.id);
             return (
               <button
                 key={routine.id}

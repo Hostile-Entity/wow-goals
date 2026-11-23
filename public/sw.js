@@ -1,148 +1,80 @@
-const CACHE_NAME = "wow-goals-v39";
+// Replaced by the production build after all output files have been written.
+const RELEASE = "__WOWGOALS_RELEASE__";
+const APP_VERSION = "__WOWGOALS_APP_VERSION__";
+const PRECACHE = ["__WOWGOALS_PRECACHE__"];
 
-const scopeUrl = new URL(self.registration.scope);
-const BASE_PATH = scopeUrl.pathname;
+const PREFIX = "wow-goals-";
+const CACHE_NAME = `${PREFIX}${RELEASE}`;
+const scope = new URL(self.registration.scope);
+const releaseAssets = new Map(PRECACHE.map(([asset, integrity]) => [new URL(asset, scope).href, integrity]));
+const index = new URL("index.html", scope);
 
-const APP_SHELL_URLS = [BASE_PATH, `${BASE_PATH}index.html`];
-
-function isSameOrigin(url) {
-  return url.origin === self.location.origin;
-}
-
-function isServiceWorkerRequest(url) {
-  return url.pathname.endsWith("/sw.js");
-}
-
-function isNavigationRequest(request) {
-  if (request.mode === "navigate") return true;
-  const accept = request.headers.get("accept") || "";
-  return accept.includes("text/html");
-}
-
-function canRuntimeCache(url) {
-  if (!isSameOrigin(url)) return false;
-  if (isServiceWorkerRequest(url)) return false;
-  return url.pathname.startsWith(BASE_PATH);
-}
-
-async function cacheAppShell(cache) {
-  await Promise.all(
-    APP_SHELL_URLS.map(async (url) => {
-      const req = new Request(url, { cache: "reload" });
-      const resp = await fetch(req);
-      if (!resp.ok) throw new Error("App shell could not be cached");
-      await cache.put(req, resp.clone());
-      // First-visit JS/CSS often loads before this worker controls the page.
-      // Cache the built shell's exact hashed assets now, not only on later fetches.
-      const html = await resp.text();
-      const assets = [...html.matchAll(/(?:src|href)=["']([^"']+\.(?:js|css)(?:\?[^"']*)?)["']/g)].map(match => new URL(match[1], new URL(url, self.location.origin)));
-      await Promise.all(assets.filter(asset => isSameOrigin(asset) && asset.pathname.startsWith(BASE_PATH)).map(async asset => {
-        const request = new Request(asset.href, { cache: "reload" });
-        const response = await fetch(request);
-        if (!response.ok) throw new Error("An app asset could not be cached");
-        await cache.put(request, response);
-      }));
-    }),
-  );
-}
-
-async function cacheFirst(request) {
+async function installRelease() {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
-  if (cached) return cached;
-
-  try {
+  // Wait for every request to settle before deleting an incomplete cache.
+  const results = await Promise.allSettled([...releaseAssets].map(async ([url, integrity]) => {
+    const request = new Request(url, { cache: "reload", integrity });
     const response = await fetch(request);
-    if (response.ok && canRuntimeCache(new URL(request.url))) {
-      await cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    if (isNavigationRequest(request)) {
-      const appShell = (await cache.match(`${BASE_PATH}index.html`)) ?? (await cache.match(BASE_PATH));
-      if (appShell) return appShell;
-    }
-
-    throw new Error("Offline and not cached");
+    if (!response.ok || response.redirected)
+      throw new Error(`Could not cache release asset: ${url}`);
+    await cache.put(request, response);
+  }));
+  if (results.some((result) => result.status === "rejected")) {
+    await caches.delete(CACHE_NAME);
+    throw new Error("The new WowGoals release could not be cached.");
   }
 }
 
-async function networkFirst(request) {
-  const cache = await caches.open(CACHE_NAME);
-
-  try {
-    const response = await fetch(request, { cache: "no-store" });
-    if (response.ok && canRuntimeCache(new URL(request.url))) {
-      await cache.put(request, response.clone());
-    }
-    return response;
-  } catch {
-    const cached = await cache.match(request);
-    if (cached) return cached;
-
-    if (isNavigationRequest(request)) {
-      const appShell = (await cache.match(`${BASE_PATH}index.html`)) ?? (await cache.match(BASE_PATH));
-      if (appShell) return appShell;
-    }
-
-    throw new Error("Offline and not cached");
-  }
-}
-
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-      await cacheAppShell(cache);
-    })(),
-  );
-});
+self.addEventListener("install", (event) => event.waitUntil(installRelease()));
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    (async () => {
-      const keys = await caches.keys();
-      await Promise.all(
-        keys.map((key) => {
-          if (key === CACHE_NAME || !key.startsWith("wow-goals-v")) return null;
-          return caches.delete(key);
-        }),
-      );
-      await self.clients.claim();
-    })(),
-  );
+  event.waitUntil((async () => {
+    const previous = (await caches.keys()).filter((key) => key.startsWith(PREFIX) && key !== CACHE_NAME);
+    // Old open clients can still request a previous release's lazy chunks
+    // between controllerchange and their next navigation.
+    await Promise.all(previous.slice(0, -1).map((key) => caches.delete(key)));
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener("message", (event) => {
   const message = event.data;
-  if (!message || typeof message !== "object") return;
-
-  if (message.type === "GET_VERSION") {
-    const replyPort = event.ports?.[0];
-    if (replyPort) {
-      const match = CACHE_NAME.match(/-v(\d+)/i);
-      replyPort.postMessage({
-        cacheName: CACHE_NAME,
-        version: match ? Number(match[1]) : null,
-      });
-    }
-    return;
-  }
-
-  if (message.type === "SKIP_WAITING") {
+  if (message?.type === "GET_VERSION") {
+    event.ports?.[0]?.postMessage({ cacheName: CACHE_NAME, version: RELEASE, appVersion: APP_VERSION });
+  } else if (message?.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
 });
 
+async function serve(request, key, previousAsset = false) {
+  // Prefer the active release's shell even online: a freshly deployed shell
+  // could otherwise refer to chunks that have not been staged yet.
+  try {
+    const cached = await caches.match(key, { cacheName: CACHE_NAME });
+    if (cached) return cached;
+    if (previousAsset) {
+      const previous = (await caches.keys()).filter((name) => name !== CACHE_NAME && name.startsWith(PREFIX));
+      for (const name of previous.reverse()) {
+        const cached = await caches.match(key, { cacheName: name });
+        if (cached) return cached;
+      }
+    }
+  } catch {
+    // Cache storage can be unavailable; never discard a usable network response.
+  }
+  return fetch(request);
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (request.method !== "GET") return;
-
-  const requestUrl = new URL(request.url);
-  if (isServiceWorkerRequest(requestUrl)) {
-    event.respondWith(fetch(request));
+  const url = new URL(request.url);
+  if (request.method !== "GET" || url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname))
     return;
+  if (request.mode === "navigate" && (url.pathname === scope.pathname || url.pathname === index.pathname)) {
+    event.respondWith(serve(request, index.href));
+  } else if (releaseAssets.has(url.href)) {
+    event.respondWith(serve(request, url.href));
+  } else if (url.pathname.startsWith(`${scope.pathname}assets/`)) {
+    event.respondWith(serve(request, url.href, true));
   }
-
-  event.respondWith(networkFirst(request));
 });

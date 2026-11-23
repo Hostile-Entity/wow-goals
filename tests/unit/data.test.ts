@@ -97,7 +97,7 @@ describe("one-time database transition", () => {
     expect(meta.find(m => m.id === "pre-v3")?.data).toBe("older snapshot");
     expect(canonical(meta.find(m => m.id === "pre-v4").data.data)).toEqual(canonical(old));
     expect(meta.some(m => m.id === "migration")).toBe(false);
-    await mutateDatabase(db, ["settings"], records => [{ store: "settings", row: { ...records.settings[0], showStatus: !old.settings.showStatus } }]);
+    await mutateDatabase(db, { read: [{ store: "settings", key: "settings" }], write: ["settings"] }, records => [{ store: "settings", row: { ...records.settings[0], showStatus: !old.settings.showStatus } }]);
     db.close();
     const reopened = await openDatabase(dbName);
     expect((await readSnapshot(reopened)).settings.showStatus).toBe(!old.settings.showStatus);
@@ -420,18 +420,14 @@ describe("selected core flows", () => {
   it("only reads the affected store for a normal edit, not all history", async () => {
     const db = await openDatabase(name());
     await replaceSnapshot(db, migrated());
-    const names: string[] = [];
-    const original = IDBObjectStore.prototype.getAll;
-    const spy = vi
-      .spyOn(IDBObjectStore.prototype, "getAll")
-      .mockImplementation(function (
-        this: IDBObjectStore,
-        ...args: Parameters<IDBObjectStore["getAll"]>
-      ) {
-        names.push(this.name);
-        return original.apply(this, args);
-      });
-    await mutateDatabase(db, ["notes"], (records) =>
+    const scan = vi.spyOn(IDBObjectStore.prototype, "getAll");
+    const get = vi.spyOn(IDBObjectStore.prototype, "get");
+    await mutateDatabase(db, { write: ["notes", "logs"] }, () => [
+      { store: "notes", row: { ...migrated().notes[0], id: "new-note" } },
+    ]);
+    expect(scan).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+    await mutateDatabase(db, { read: [{ store: "notes", key: "note-a" }], write: ["notes", "logs"] }, (records) =>
       updateCommand(
         records,
         "note",
@@ -440,8 +436,10 @@ describe("selected core flows", () => {
         "2026-11-12",
       ),
     );
-    spy.mockRestore();
-    expect(names).toEqual(["notes"]);
+    expect(scan).not.toHaveBeenCalled();
+    expect(get.mock.calls).toEqual([["note-a"]]);
+    scan.mockRestore();
+    get.mockRestore();
     db.close();
   });
   it("task completion is atomic/idempotent under repeated and concurrent taps", async () => {
@@ -449,7 +447,7 @@ describe("selected core flows", () => {
     await replaceSnapshot(db, migrated());
     await Promise.all(
       [1, 2, 3].map(() =>
-        mutateDatabase(db, ["tasks", "completions"], (records) =>
+        mutateDatabase(db, { read: [{ store: "tasks", key: "task-a" }], write: ["tasks", "completions", "logs"] }, (records) =>
           completeTaskCommand(records, "task-a", "2026-11-12"),
         ),
       ),
@@ -465,7 +463,7 @@ describe("selected core flows", () => {
     const db = await openDatabase(name());
     await replaceSnapshot(db, migrated());
     await expect(
-      mutateDatabase(db, ["tasks", "completions"], (records) => [
+      mutateDatabase(db, { read: [{ store: "tasks", key: "task-a" }], write: ["tasks", "completions", "logs"] }, (records) => [
         ...completeTaskCommand(records, "task-a", "2026-11-12"),
         { store: "logs", row: { id: "bad", data: () => {} } as any },
       ]),

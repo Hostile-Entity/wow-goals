@@ -735,9 +735,14 @@ test("fresh production install works offline after reload", async ({
 test("installed worker version stays accurate and manual update preserves capture draft", async ({
   page,
   request,
+  context,
 }) => {
+  await request.post("/__test/synthetic");
   await page.goto("./");
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+  const entry = () => page.locator('script[type="module"][src]').getAttribute("src");
+  const oldEntry = await entry();
+  expect(oldEntry).toMatch(/-test31\.js$/);
   await tab(page, "Notes").click();
   await page
     .getByRole("textbox", { name: "Add a note..." })
@@ -754,6 +759,11 @@ test("installed worker version stays accurate and manual update preserves captur
   );
   // A waiting worker is NOT the installed version.
   await expect(page.getByText("Version: v31", { exact: true })).toBeVisible();
+  const staged = await context.newPage();
+  await staged.goto("./");
+  await expect(staged.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(staged.locator('script[type="module"][src]')).toHaveAttribute("src", oldEntry!);
+  await staged.close();
   page.once("dialog", (dialog) => dialog.accept());
   await page
     .getByRole("button", { name: "Check for update", exact: true })
@@ -767,6 +777,11 @@ test("installed worker version stays accurate and manual update preserves captur
   ).toHaveValue("Draft survives update");
   await page.getByRole("button", { name: "Open app settings" }).click();
   await expect(page.getByText("Version: v32", { exact: true })).toBeVisible();
+  expect(await entry()).toMatch(/-test32\.js$/);
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  expect(await entry()).toMatch(/-test32\.js$/);
 });
 
 test("blocked one-time upgrade waits for the old window without resetting data", async ({

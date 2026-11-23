@@ -1,4 +1,4 @@
-import { Change, Records, uid } from "../db";
+import { Change, PutChange, Records, StoreMap, uid } from "../db";
 import {
   BaseEntity,
   EntityType,
@@ -6,8 +6,6 @@ import {
   Goal,
   ItemStatus,
   Note,
-  Project,
-  Task,
 } from "../types";
 import { entityStores, initialStatus, lifecycle } from "./lifecycle";
 import { changeTodo, projectTodos } from "./projectTodos";
@@ -29,7 +27,7 @@ export function event(
   entityType: string,
   entityId: string | undefined,
   detail: unknown,
-): Change {
+): PutChange<"logs"> {
   const row: EventLog = {
     id: uid("log"),
     at: nowIso(),
@@ -40,23 +38,26 @@ export function event(
   };
   return { store: "logs", row };
 }
-export function findEntity(
-  records: Records,
-  type: EntityType,
+type EntityStore<T extends EntityType> = (typeof entityStores)[T];
+export type EntityRow<T extends EntityType> = StoreMap[EntityStore<T>];
+
+export function findEntity<T extends EntityType>(
+  records: Records<EntityStore<T>>,
+  type: T,
   id: string,
-): BaseEntity {
+): EntityRow<T> {
   const row = records[entityStores[type]].find((row) => row.id === id);
   if (!row)
     throw new Error("This item no longer exists. Close and reopen the view.");
   return row;
 }
-export function updateCommand(
-  records: Records,
-  type: EntityType,
+export function updateCommand<T extends EntityType>(
+  records: Records<EntityStore<T>>,
+  type: T,
   id: string,
-  mutator: (row: any) => any,
+  mutator: (row: EntityRow<NoInfer<T>>) => EntityRow<NoInfer<T>>,
   day: string,
-): Change[] {
+): Change<EntityStore<T> | "logs">[] {
   const current = findEntity(records, type, id);
   const updated = { ...mutator(structuredClone(current)), updatedAt: nowIso() };
   if (
@@ -64,9 +65,14 @@ export function updateCommand(
     !updated.title.trim()
   )
     throw new Error("Invalid item title or status.");
-  const changes: Change[] = [{ store: entityStores[type], row: updated }];
+  // The generic entity key ties the store and row together; TS cannot express
+  // that correlation when constructing a member of the mapped union.
+  const changes: Change<EntityStore<T> | "logs">[] = [
+    { store: entityStores[type], row: updated } as PutChange<EntityStore<T>>,
+  ];
   if (type === "goal") {
     const goal = updated as Goal;
+    const previousMetrics = (current as Goal).metrics;
     if (
       !goal.metrics.length ||
       !goal.metrics.some((metric) => metric.id === goal.primaryMetricId) ||
@@ -75,7 +81,7 @@ export function updateCommand(
           !Number.isFinite(metric.current) ||
           !Number.isFinite(metric.target) ||
           (metric.target <= 0 &&
-            !(current as Goal).metrics.some(
+            !previousMetrics.some(
               (previous) =>
                 previous.id === metric.id && previous.target === metric.target,
             )),
@@ -85,7 +91,7 @@ export function updateCommand(
         "Metrics need finite values and new targets greater than zero.",
       );
     for (const metric of goal.metrics) {
-      const previous = (current as Goal).metrics.find(
+      const previous = previousMetrics.find(
         (item) => item.id === metric.id,
       );
       if (previous && previous.current !== metric.current)
@@ -111,11 +117,11 @@ export function updateCommand(
   return changes;
 }
 export function completeTaskCommand(
-  records: Records,
+  records: Records<"tasks">,
   id: string,
   day: string,
-): Change[] {
-  const task = findEntity(records, "task", id) as Task;
+): Change<"tasks" | "completions" | "logs">[] {
+  const task = findEntity(records, "task", id);
   if (task.status === "done") return [];
   if (!["open", "doing"].includes(task.status))
     throw new Error("Unarchive this task before completing it.");
@@ -136,12 +142,12 @@ export function completeTaskCommand(
 }
 
 export function triageCommand(
-  records: Records,
+  records: Records<"notes">,
   draft: Note,
   to: Exclude<EntityType, "note">,
   day: string,
-): Change[] {
-  const note = findEntity(records, "note", draft.id) as Note;
+): Change<EntityStore<EntityType> | "logs">[] {
+  const note = findEntity(records, "note", draft.id);
   if (draft.updatedAt !== note.updatedAt)
     throw new Error(
       "This note changed in another view. Your draft was kept; close and reopen before converting.",
@@ -151,22 +157,27 @@ export function triageCommand(
       "This note was already converted. Open the result or undo its conversion first.",
     );
   if (!draft.title.trim()) throw new Error("Enter a title before converting.");
-  const destination: any = {
+  const fields = {
     ...base(to, draft.title),
     description: draft.description,
   };
-  if (to === "task")
-    Object.assign(destination, { priority: 2, postponedCount: 0 });
-  if (to === "project") destination.summary = "";
-  if (to === "goal") {
-    const metricId = uid("metric");
-    Object.assign(destination, {
-      metrics: [{ id: metricId, name: "Progress", current: 0, target: 10 }],
-      primaryMetricId: metricId,
-    });
-  }
+  const destination: PutChange<EntityStore<Exclude<EntityType, "note">>> = (() => {
+    switch (to) {
+      case "task": return { store: "tasks", row: { ...fields, priority: 2, postponedCount: 0 } };
+      case "project": return { store: "projects", row: { ...fields, summary: "" } };
+      case "goal": {
+        const metricId = uid("metric");
+        return { store: "goals", row: {
+          ...fields,
+          metrics: [{ id: metricId, name: "Progress", current: 0, target: 10 }],
+          primaryMetricId: metricId,
+        } };
+      }
+      case "routine": return { store: "routines", row: fields };
+    }
+  })();
   return [
-    { store: entityStores[to], row: destination },
+    destination,
     {
       store: "notes",
       row: {
@@ -174,7 +185,7 @@ export function triageCommand(
         title: draft.title.trim(),
         description: draft.description,
         triagedTo: to,
-        triagedId: destination.id,
+        triagedId: destination.row.id,
         triagePreviousStatus: note.status,
         status: "archived",
         updatedAt: nowIso(),
@@ -182,17 +193,17 @@ export function triageCommand(
     },
     event("triage", "note", note.id, {
       to,
-      destinationId: destination.id,
+      destinationId: destination.row.id,
       occurredDay: day,
     }),
   ];
 }
 export function undoTriageCommand(
-  records: Records,
+  records: Records<EntityStore<EntityType> | "completions">,
   id: string,
   day: string,
-): Change[] {
-  const note = findEntity(records, "note", id) as Note;
+): Change<EntityStore<EntityType> | "logs">[] {
+  const note = findEntity(records, "note", id);
   if (!note.triagedTo || !note.triagedId)
     throw new Error(
       "This older conversion has no recoverable destination link.",
@@ -228,14 +239,14 @@ export function undoTriageCommand(
   ];
 }
 export function projectTodoCommand(
-  records: Records,
+  records: Records<"projects">,
   id: string,
   index: number,
   patch: { checked?: boolean; text?: string },
   day: string,
   expectedUpdatedAt?: string,
-): Change[] {
-  const project = findEntity(records, "project", id) as Project;
+): Change<"projects" | "logs">[] {
+  const project = findEntity(records, "project", id);
   if (expectedUpdatedAt && project.updatedAt !== expectedUpdatedAt)
     throw new Error(
       "The project changed in another view. Your draft was kept; close and reopen it before changing this TODO.",
@@ -246,7 +257,7 @@ export function projectTodoCommand(
     (row) => row.sourceIndex === index,
   );
   const description = changeTodo(project.description, index, patch);
-  const changes: Change[] = [
+  const changes: Change<"projects" | "logs">[] = [
     {
       store: "projects",
       row: { ...project, description, updatedAt: nowIso() },
@@ -274,24 +285,83 @@ export function projectTodoCommand(
   return changes;
 }
 
+type DeleteWrites = EntityStore<EntityType> | "settings" | "logs";
+export function deleteEntityCommand(
+  records: Records<Exclude<DeleteWrites, "logs">>,
+  type: EntityType,
+  id: string,
+  day: string,
+): Change<DeleteWrites>[] {
+  const current = findEntity(records, type, id);
+  const changes: Change<DeleteWrites>[] = [
+    { store: entityStores[type], deleteId: id },
+    event("delete-permanent", type, id, {
+      title: current.title,
+      createdAt: current.createdAt,
+      occurredDay: day,
+    }),
+  ];
+  if (type === "task") {
+    const [settings] = records.settings;
+    if (settings.focusTaskIds.includes(id)) {
+      changes.push({
+        store: "settings",
+        row: { ...settings, focusTaskIds: settings.focusTaskIds.filter((taskId) => taskId !== id) },
+      });
+    }
+  }
+  function unlink<T extends { id: string; goalId?: string; projectId?: string }>(
+    rows: T[], add: (row: T) => void,
+  ) {
+    for (const row of rows) {
+      if (row.id === id || (row.goalId !== id && row.projectId !== id)) continue;
+      add({
+        ...row,
+        ...(row.goalId === id ? { goalId: undefined } : {}),
+        ...(row.projectId === id ? { projectId: undefined } : {}),
+      });
+    }
+  }
+  unlink(records.tasks, (row) => changes.push({ store: "tasks", row }));
+  unlink(records.projects, (row) => changes.push({ store: "projects", row }));
+  unlink(records.routines, (row) => changes.push({ store: "routines", row }));
+  return changes;
+}
+
+export function captureNote(input: string): Note | undefined {
+  const lines = input.replace(/\r\n/g, "\n").split("\n");
+  const index = lines.findIndex((line) => line.trim());
+  if (index < 0) return;
+  return {
+    ...base("note", lines[index]),
+    description: lines.slice(index + 1).join("\n").trim(),
+  };
+}
+
 export function applyChanges(
   state: import("../types").AppStateData,
   changes: Change[],
 ) {
   const next = { ...state };
+  const batches = new Map<Exclude<keyof Records, "meta" | "settings">, Map<string, Change>>();
   for (const change of changes) {
     if (change.store === "meta") continue;
     if (change.store === "settings") {
       if ("row" in change)
-        next.settings = change.row as import("../types").AppSettings;
+        next.settings = change.row;
       continue;
     }
-    const rows = next[change.store] as { id: string }[];
     const id = "row" in change ? change.row.id : change.deleteId;
-    const filtered = rows.filter((row) => row.id !== id);
-    (next[change.store] as unknown[]) =
-      "row" in change ? [...filtered, change.row] : filtered;
+    let batch = batches.get(change.store);
+    if (!batch) batches.set(change.store, batch = new Map());
+    batch.delete(id);
+    batch.set(id, change);
   }
-  next.logs = [...next.logs].sort((a, b) => b.at.localeCompare(a.at));
+  for (const [store, batch] of batches) {
+    const rows = (state[store] as { id: string }[]).filter((row) => !batch.has(row.id));
+    for (const change of batch.values()) if ("row" in change) rows.push(change.row);
+    (next[store] as unknown[]) = rows;
+  }
+  if (batches.has("logs")) next.logs.sort((a, b) => b.at.localeCompare(a.at));
   return next;
 }

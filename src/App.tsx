@@ -18,7 +18,8 @@ import { EntityType } from "./types";
 import { MoreTab } from "./features/MoreTab";
 import { NotesTab } from "./features/NotesTab";
 import { ProjectsTab } from "./features/ProjectsTab";
-import { SearchResultItem, SearchTab } from "./features/SearchTab";
+import { SearchTab } from "./features/SearchTab";
+import { buildSearchResults, SearchResultItem } from "./state/search";
 import { TasksTab } from "./features/TasksTab";
 import { TodayTab } from "./features/TodayTab";
 import { FilterKey, useAppData } from "./state/useAppData";
@@ -33,75 +34,6 @@ type EditorTarget = {
   detail?: boolean;
 } | null;
 
-function getMatchRank(source: string, query: string, index: number): number {
-  if (source === query) return 0;
-  if (source.startsWith(query)) return 1;
-  const prev = source[index - 1];
-  if (prev && /[\s_\-.,/]/.test(prev)) return 2;
-  return 3;
-}
-
-function buildSearchResults(
-  app: ReturnType<typeof useAppData>,
-  query: string,
-): SearchResultItem[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-
-  const rows = [
-    ...app.state.notes.map((item) => ({ ...item, type: "note" as const })),
-    ...app.state.tasks.map((item) => ({ ...item, type: "task" as const })),
-    ...app.state.projects.map((item) => ({
-      ...item,
-      type: "project" as const,
-    })),
-    ...app.state.goals.map((item) => ({ ...item, type: "goal" as const })),
-    ...app.state.routines.map((item) => ({
-      ...item,
-      type: "routine" as const,
-    })),
-  ];
-
-  return rows
-    .map((item) => {
-      const title = item.title ?? "";
-      const description = item.description ?? "";
-      const titleLower = title.toLowerCase();
-      const descLower = description.toLowerCase();
-      const titleMatch = titleLower.indexOf(q);
-      const descMatch = descLower.indexOf(q);
-      if (titleMatch < 0 && descMatch < 0) return null;
-
-      const matchedField: "title" | "description" =
-        titleMatch >= 0 ? "title" : "description";
-      const fieldRank = matchedField === "title" ? 0 : 1;
-      const index = matchedField === "title" ? titleMatch : descMatch;
-      const source = matchedField === "title" ? titleLower : descLower;
-
-      return {
-        id: item.id,
-        type: item.type,
-        title,
-        description,
-        matchedField,
-        fieldRank,
-        matchRank: getMatchRank(source, q, index),
-        matchIndex: index,
-        updatedAt: item.updatedAt,
-      };
-    })
-    .filter((item): item is NonNullable<typeof item> => item !== null)
-    .sort((a, b) => {
-      if (a.fieldRank !== b.fieldRank) return a.fieldRank - b.fieldRank;
-      if (a.matchRank !== b.matchRank) return a.matchRank - b.matchRank;
-      if (a.matchIndex !== b.matchIndex) return a.matchIndex - b.matchIndex;
-      return b.updatedAt.localeCompare(a.updatedAt);
-    })
-    .map(
-      ({ fieldRank, matchRank, matchIndex, updatedAt, ...result }) => result,
-    );
-}
-
 function App() {
   const [editor, setEditor] = useState<EditorTarget>(null);
   const [conversionNoteId, setConversionNoteId] = useState<string | null>(null);
@@ -113,7 +45,7 @@ function App() {
   const [isLogView, setIsLogView] = useState(
     () => typeof window !== "undefined" && window.location.hash === "#/logs",
   );
-  const app = useAppData();
+  const app = useAppData(isLogView);
   function closeEditor() { setEditor(null); setConversionNoteId(null); }
   const conversion = conversionNoteId ? {
     back: () => { closeEditor(); app.setTab("notes"); app.selectFilter("notes", "inbox"); },
@@ -161,9 +93,10 @@ function App() {
     if (editor?.mode === "edit" && app.loaded && !selectedEntity)
       closeEditor();
   }, [selectedEntity, editor, app.loaded]);
+  const { notes, tasks, projects, goals, routines } = app.state;
   const searchResults = useMemo(
-    () => buildSearchResults(app, debouncedSearchQuery),
-    [app, debouncedSearchQuery],
+    () => buildSearchResults({ notes, tasks, projects, goals, routines }, debouncedSearchQuery),
+    [notes, tasks, projects, goals, routines, debouncedSearchQuery],
   );
   const logRowVirtualizer = useVirtualizer({
     count: app.state.logs.length,
@@ -471,6 +404,7 @@ function App() {
             <button onClick={handleCloseLogView}>Close</button>
           </div>
           <div className="log-view-list cards" ref={logScrollRef}>
+            {!app.logsReady && <p className="meta" role="status">{app.error || "Loading history…"}</p>}
             <div
               style={{
                 height: logRowVirtualizer.getTotalSize(),
@@ -596,6 +530,7 @@ function App() {
                 routines={app.state.routines}
                 completions={app.state.completions}
                 reviews={app.state.reviews}
+                reviewReady={app.reviewReady}
                 logs={app.state.logs}
                 logicalDay={app.logicalDay}
                 dayStartHour={app.dayStartHour}
@@ -605,7 +540,7 @@ function App() {
                 }
                 onCreateGoal={() => setEditor({ mode: "create", type: "goal" })}
                 primaryMetric={app.primaryMetric}
-                saveWeeklyReview={app.saveWeeklyReview}
+                weeklyReviewDrafts={app.weeklyReviewDrafts}
                 toggleRoutineCompletionForDay={
                   app.toggleRoutineCompletionForDay
                 }

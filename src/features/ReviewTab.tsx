@@ -26,15 +26,8 @@ import {
 } from "../types";
 import { historicalRows, projectProgressByDay } from "../state/history";
 import { isOpen } from "../state/lifecycle";
-
-type ReviewInput = {
-  weekKey: string;
-  goalsChecked: boolean;
-  inboxCleared: boolean;
-  tasksPrioritized: boolean;
-  weekPlanned: boolean;
-  note: string;
-};
+import { WeeklyReviewDrafts } from "../state/useWeeklyReviewDrafts";
+import { ReviewFields, reviewFields } from "../state/weeklyReview";
 
 interface ReviewTabProps {
   notes: Note[];
@@ -47,7 +40,7 @@ interface ReviewTabProps {
   completions: DailyCompletion[];
   reviews: WeeklyReview[];
   logs: EventLog[];
-  saveWeeklyReview(input: ReviewInput): Promise<void>;
+  weeklyReviewDrafts: WeeklyReviewDrafts;
   toggleRoutineCompletionForDay(routineId: string, day: string): Promise<void>;
 }
 
@@ -92,7 +85,7 @@ export function ReviewTab({
   completions,
   reviews,
   logs,
-  saveWeeklyReview,
+  weeklyReviewDrafts,
   toggleRoutineCompletionForDay,
 }: ReviewTabProps) {
   const trackedStartDay = useMemo(
@@ -122,14 +115,7 @@ export function ReviewTab({
   }, [firstWeekStart, currentWeekStart]);
 
   const [selectedWeek, setSelectedWeek] = useState(currentWeekKey);
-  const [goalsChecked, setGoalsChecked] = useState(false);
-  const [inboxCleared, setInboxCleared] = useState(false);
-  const [tasksPrioritized, setTasksPrioritized] = useState(false);
-  const [weekPlanned, setWeekPlanned] = useState(false);
-  const [note, setNote] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLocked, setIsLocked] = useState(false);
-  const [saveError, setSaveError] = useState("");
+  const [routineError, setRoutineError] = useState("");
   const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
@@ -143,14 +129,16 @@ export function ReviewTab({
     [reviews, selectedWeek],
   );
 
-  useEffect(() => {
-    setGoalsChecked(Boolean(selectedReview?.goalsChecked));
-    setInboxCleared(Boolean(selectedReview?.inboxCleared));
-    setTasksPrioritized(Boolean(selectedReview?.tasksPrioritized));
-    setWeekPlanned(Boolean(selectedReview?.weekPlanned));
-    setNote(selectedReview?.note ?? "");
-    setIsLocked(Boolean(selectedReview));
-  }, [selectedReview, selectedWeek]);
+  const draft = weeklyReviewDrafts.drafts[selectedWeek];
+  const { goalsChecked, inboxCleared, tasksPrioritized, weekPlanned, note } =
+    draft?.changes?.fields ?? reviewFields(selectedReview);
+  const isLocked = Boolean(selectedReview && !draft);
+  const isSaving = Boolean(draft?.saving);
+  const saveError = draft?.error || routineError;
+
+  function updateDraft(patch: Partial<ReviewFields>) {
+    weeklyReviewDrafts.update(selectedWeek, selectedReview, patch);
+  }
 
   const weekDays = useMemo(() => getWeekDays(selectedWeek), [selectedWeek]);
   const dayLabels = weekDays.map((day) => Number(day.slice(8, 10)).toString());
@@ -259,37 +247,13 @@ export function ReviewTab({
     if (delta >= 40) goToPrevWeek();
   }
 
-  async function handleSave(): Promise<void> {
-    if (isSaving || isLocked) return;
-    setIsSaving(true);
-    setSaveError("");
-    try {
-      await saveWeeklyReview({
-        weekKey: selectedWeek,
-        goalsChecked,
-        inboxCleared,
-        tasksPrioritized,
-        weekPlanned,
-        note,
-      });
-      setIsLocked(true);
-    } catch (error) {
-      setSaveError(
-        error instanceof Error
-          ? error.message
-          : "Review was not saved. Your reflection was kept.",
-      );
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
   function handleSaveOrEdit(): void {
     if (isLocked) {
-      setIsLocked(false);
+      weeklyReviewDrafts.begin(selectedWeek);
       return;
     }
-    void handleSave();
+    setRoutineError("");
+    void weeklyReviewDrafts.save(selectedWeek, selectedReview);
   }
 
   return (
@@ -392,7 +356,7 @@ export function ReviewTab({
             type="checkbox"
             checked={goalsChecked}
             disabled={isLocked || isSaving}
-            onChange={(e) => setGoalsChecked(e.currentTarget.checked)}
+            onChange={(e) => updateDraft({ goalsChecked: e.currentTarget.checked })}
           />{" "}
           Goals reviewed
         </label>
@@ -401,7 +365,7 @@ export function ReviewTab({
             type="checkbox"
             checked={inboxCleared}
             disabled={isLocked || isSaving}
-            onChange={(e) => setInboxCleared(e.currentTarget.checked)}
+            onChange={(e) => updateDraft({ inboxCleared: e.currentTarget.checked })}
           />{" "}
           Notes cleaned
         </label>
@@ -410,7 +374,7 @@ export function ReviewTab({
             type="checkbox"
             checked={tasksPrioritized}
             disabled={isLocked || isSaving}
-            onChange={(e) => setTasksPrioritized(e.currentTarget.checked)}
+            onChange={(e) => updateDraft({ tasksPrioritized: e.currentTarget.checked })}
           />
           Tasks prioritized
         </label>
@@ -419,19 +383,30 @@ export function ReviewTab({
             type="checkbox"
             checked={weekPlanned}
             disabled={isLocked || isSaving}
-            onChange={(e) => setWeekPlanned(e.currentTarget.checked)}
+            onChange={(e) => updateDraft({ weekPlanned: e.currentTarget.checked })}
           />{" "}
           Week planned
         </label>
         <textarea
           value={note}
           disabled={isLocked || isSaving}
-          onChange={(e) => setNote(e.currentTarget.value)}
+          onChange={(e) => updateDraft({ note: e.currentTarget.value })}
           placeholder="What changed this week?"
         />
-        <button type="button" onClick={handleSaveOrEdit} disabled={isSaving}>
+        <button type="button" onClick={handleSaveOrEdit} disabled={isSaving || draft?.conflict}>
           {isSaving ? "Saving..." : isLocked ? "Edit" : "Save Weekly Review"}
         </button>
+        {draft?.conflict && (
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm("Discard your unsaved changes for this week?"))
+                weeklyReviewDrafts.discard(selectedWeek);
+            }}
+          >
+            Discard draft
+          </button>
+        )}
       </div>
 
       <div className="review-grid-wrap">
@@ -476,7 +451,7 @@ export function ReviewTab({
                     aria-label={`${routine.title} ${day} ${isDone ? "done" : "not done"}`}
                     onClick={() =>
                       void toggleRoutineCompletionForDay(routine.id, day).catch(
-                        (error) => setSaveError(String(error)),
+                         (error) => setRoutineError(String(error)),
                       )
                     }
                     role="button"
@@ -485,7 +460,7 @@ export function ReviewTab({
                       if (e.key !== "Enter" && e.key !== " ") return;
                       e.preventDefault();
                       void toggleRoutineCompletionForDay(routine.id, day).catch(
-                        (error) => setSaveError(String(error)),
+                         (error) => setRoutineError(String(error)),
                       );
                     }}
                   />

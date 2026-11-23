@@ -4,6 +4,8 @@ import {
   Change,
   clearDatabase,
   getById,
+  logicalDayAt,
+  Mutation,
   mutateDatabase,
   openDb,
   readSnapshot,
@@ -13,8 +15,8 @@ import {
   toDayString,
   uid,
 } from "../db";
-import { backupPayload, danglingReferences, parseBackup } from "../db/backup";
-import { dataStores, defaultSettings, emptyData } from "../db/schema";
+import { backupPayload, danglingReferences, parseBackupJson } from "../db/backup";
+import { dataStores, defaultSettings } from "../db/schema";
 import {
   AppSettings,
   AppStateData,
@@ -30,9 +32,11 @@ import {
   WeeklyReview,
 } from "../types";
 import {
-  applyChanges,
   base,
+  captureNote,
   completeTaskCommand,
+  deleteEntityCommand,
+  EntityRow,
   event,
   findEntity,
   nowIso,
@@ -51,7 +55,7 @@ import {
   sortItems,
   sortTasks,
   sortRoutines,
-  routineCompletedToday,
+  completionsForDay,
   savedStatusFilter,
   StatusFilter,
   statusLabel,
@@ -60,6 +64,9 @@ import { projectTodos } from "./projectTodos";
 import { useDeviceUI } from "./useDeviceUI";
 import { usePwa } from "./usePwa";
 import { applyTheme } from "./theme";
+import { useWeeklyReviewDrafts } from "./useWeeklyReviewDrafts";
+import { useLiveSnapshot } from "./useLiveSnapshot";
+import { ReviewFields, WeeklyReviewConflict, weeklyReviewCommand } from "./weeklyReview";
 
 export { getStatusBucket };
 export type { FilterKey, StatusFilter };
@@ -141,13 +148,11 @@ function download(value: unknown, name: string) {
   a.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
-export function useAppData() {
-  const [state, setState] = useState<AppStateData>(emptyData);
-  const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState("");
+export function useAppData(wantsLogs = false) {
   const [busy, setBusy] = useState(0);
   const [tab, setTab] = useState<Tab>("today");
   const [moreTab, setMoreTab] = useState<MoreTab>("review");
+  const [wantsChartHistory, setWantsChartHistory] = useState(false);
   const [filters, setFilters] = useState(savedFilters);
   const [reveal, setReveal] = useState<FilterKey | null>(null);
   const [openFilterMenu, setOpenFilterMenu] = useState<FilterKey | null>(null);
@@ -163,9 +168,10 @@ export function useAppData() {
   const [now, setNow] = useState(Date.now);
   const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
   const noteComposerRef = useRef<HTMLFormElement>(null);
-  const stateRef = useRef(state);
-  stateRef.current = state;
-  const channelRef = useRef<BroadcastChannel | null>(null);
+  const {
+    data: state, stateRef, loaded, error, setError, reloadAll, run, applyCommitted,
+    notifyReplacement, logsReady, reviewReady,
+  } = useLiveSnapshot(wantsLogs || wantsChartHistory, tab === "more" && moreTab === "review", now, setNow);
   const settings = state.settings;
   const {
     dayStartHour,
@@ -174,9 +180,7 @@ export function useAppData() {
     theme,
     dayOffset: logicalOffset,
   } = settings;
-  const date = new Date(now);
-  date.setDate(date.getDate() + logicalOffset);
-  const logicalDay = toDayString(date.toISOString(), dayStartHour);
+  const logicalDay = logicalDayAt(now, settings);
   const isKeyboardVisible = useDeviceUI(
     soundVolume,
     noteInput,
@@ -185,44 +189,13 @@ export function useAppData() {
     noteComposerRef,
   );
   const pwa = usePwa();
+  const weeklyReviewDrafts = useWeeklyReviewDrafts(saveWeeklyReview);
 
   useLayoutEffect(() => {
     // Do not overwrite the boot theme with default settings while data loads.
     if (loaded) applyTheme(theme);
   }, [loaded, theme]);
 
-  async function reloadAll() {
-    try {
-      const next = await readSnapshot(await openDb());
-      stateRef.current = next;
-      setState(next);
-      setLoaded(true);
-      setError("");
-    } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Could not open local data. Your database has not been reset.",
-      );
-    }
-  }
-  useEffect(() => {
-    void reloadAll();
-    const blocked = () =>
-      setError(
-        "Close the other WowGoals tab/window to finish the one-time database upgrade. Do not clear browser data.",
-      );
-    window.addEventListener("wowgoals-db-blocked", blocked);
-    if (typeof BroadcastChannel !== "undefined") {
-      const channel = new BroadcastChannel("wowgoals-v2");
-      channelRef.current = channel;
-      channel.onmessage = () => void reloadAll();
-    }
-    return () => {
-      window.removeEventListener("wowgoals-db-blocked", blocked);
-      channelRef.current?.close();
-    };
-  }, []);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(timer);
@@ -250,39 +223,39 @@ export function useAppData() {
       void navigator.storage.persist().catch(() => false);
   }, [loaded]);
 
-  async function mutate(
-    stores: StoreName[],
-    plan: (records: Records) => Change[],
+  async function mutate<R extends StoreName = never, W extends StoreName = never, A extends StoreName = never>(
+    scope: Mutation<R, W, A>,
+    plan: (records: Records<NoInfer<R | A>>) => NoInfer<Change<W>[]>,
   ) {
     setBusy((value) => value + 1);
     try {
-      const changes = await mutateDatabase(await openDb(), stores, plan);
-      setError("");
-      setState((current) => {
-        const next = applyChanges(current, changes);
-        stateRef.current = next;
-        return next;
+      return await run(async () => {
+        const changes = await mutateDatabase(await openDb(), scope, plan);
+        setError("");
+        applyCommitted(changes);
+        return changes;
       });
-      channelRef.current?.postMessage("changed");
-      return changes;
     } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Nothing was saved. Please try again.",
-      );
+      if (!(error instanceof WeeklyReviewConflict)) {
+        setError(
+          error instanceof Error
+            ? error.message
+            : "Nothing was saved. Please try again.",
+        );
+      }
       throw error;
     } finally {
       setBusy((value) => value - 1);
     }
   }
-  async function updateEntity(
-    type: EntityType,
+  async function updateEntity<T extends EntityType>(
+    type: T,
     id: string,
-    mutator: (row: any) => any,
+    mutator: (row: EntityRow<NoInfer<T>>) => EntityRow<NoInfer<T>>,
     expectedUpdatedAt?: string,
   ) {
-    await mutate([entityStores[type]], (records) => {
+    const store = entityStores[type];
+    await mutate({ read: [{ store, key: id }], write: [store, "logs"] }, (records) => {
       if (
         expectedUpdatedAt &&
         findEntity(records, type, id).updatedAt !== expectedUpdatedAt
@@ -294,17 +267,9 @@ export function useAppData() {
     });
   }
   async function addNote() {
-    const lines = noteInput.replace(/\r\n/g, "\n").split("\n");
-    const index = lines.findIndex((line) => line.trim());
-    if (index < 0) return;
-    const note: Note = {
-      ...base("note", lines[index]),
-      description: lines
-        .slice(index + 1)
-        .join("\n")
-        .trim(),
-    };
-    await mutate(["notes"], () => [
+    const note = captureNote(noteInput);
+    if (!note) return;
+    await mutate({ write: ["notes", "logs"] }, () => [
       { store: "notes", row: note },
       event("create", "note", note.id, "Captured note"),
     ]);
@@ -321,7 +286,7 @@ export function useAppData() {
       postponedCount: 0,
     };
     if (!task.title) throw new Error("Enter a task title.");
-    await mutate(["tasks"], () => [
+    await mutate({ write: ["tasks", "logs"] }, () => [
       { store: "tasks", row: task },
       event("create", "task", task.id, "Added task"),
     ]);
@@ -333,7 +298,7 @@ export function useAppData() {
       description: draft.description ?? "",
       summary: draft.summary ?? "",
     };
-    await mutate(["projects"], () => [
+    await mutate({ write: ["projects", "logs"] }, () => [
       { store: "projects", row: project },
       event("create", "project", project.id, "Added project"),
     ]);
@@ -348,7 +313,7 @@ export function useAppData() {
       metrics,
       primaryMetricId: draft.primaryMetricId ?? metrics[0].id,
     };
-    await mutate(["goals"], () => [
+    await mutate({ write: ["goals", "logs"] }, () => [
       { store: "goals", row: goal },
       event("create", "goal", goal.id, "Added goal"),
     ]);
@@ -359,13 +324,16 @@ export function useAppData() {
       ...draft,
       description: draft.description ?? "",
     };
-    await mutate(["routines"], () => [
+    await mutate({ write: ["routines", "logs"] }, () => [
       { store: "routines", row: routine },
       event("create", "routine", routine.id, "Added routine"),
     ]);
   }
   async function triageNote(note: Note, to: Exclude<EntityType, "note">) {
-    const changes = await mutate(["notes", entityStores[to]], (records) =>
+    const changes = await mutate({
+      read: [{ store: "notes", key: note.id }],
+      write: ["notes", entityStores[to], "logs"],
+    }, (records) =>
       triageCommand(records, note, to, logicalDay),
     );
     const destination = changes.find(change => change.store === entityStores[to] && "row" in change);
@@ -374,7 +342,10 @@ export function useAppData() {
   }
   async function undoTriage(id: string) {
     const changes = await mutate(
-      ["notes", "tasks", "projects", "goals", "routines", "completions"],
+      {
+        read: [{ store: "notes", key: id }, "tasks", "projects", "goals", "routines", "completions"],
+        write: ["notes", "tasks", "projects", "goals", "routines", "logs"],
+      },
       (records) => undoTriageCommand(records, id, logicalDay),
     );
     const restored = changes.find(change => change.store === "notes" && "row" in change);
@@ -385,12 +356,12 @@ export function useAppData() {
     }
   }
   async function completeTask(id: string) {
-    await mutate(["tasks", "completions"], (records) =>
+    await mutate({ read: [{ store: "tasks", key: id }], write: ["tasks", "completions", "logs"] }, (records) =>
       completeTaskCommand(records, id, logicalDay),
     );
   }
   async function postponeTask(id: string, until = addDays(logicalDay, 1)) {
-    await mutate(["tasks"], (records) =>
+    await mutate({ read: [{ store: "tasks", key: id }], write: ["tasks", "logs"] }, (records) =>
       updateCommand(
         records,
         "task",
@@ -406,7 +377,16 @@ export function useAppData() {
     );
   }
   async function toggleFocus(id: string) {
-    await mutate(["settings", "tasks"], (records) => {
+    await mutate({
+      read: [{ store: "settings", key: "settings" }],
+      afterRead: {
+        stores: ["tasks"],
+        select: ({ settings: [current] }) => current.focusTaskIds.includes(id)
+          ? []
+          : [id, ...current.focusTaskIds].map((key) => ({ store: "tasks", key })),
+      },
+      write: ["settings"],
+    }, (records) => {
       const current = records.settings[0];
       if (current.focusTaskIds.includes(id))
         return [
@@ -479,51 +459,16 @@ export function useAppData() {
     )
       return;
     await mutate(
-      [
-        entityStores[type],
-        "tasks",
-        "projects",
-        "routines",
-        "notes",
-        "settings",
-      ],
-      (records) => {
-        const current = findEntity(records, type, id);
-        const changes: Change[] = [
-          { store: entityStores[type], deleteId: id },
-          event("delete-permanent", type, id, {
-            title: current.title,
-            createdAt: current.createdAt,
-            occurredDay: logicalDay,
-          }),
-        ];
-        if (type === "task" && records.settings[0].focusTaskIds.includes(id))
-          changes.push({
-            store: "settings",
-            row: {
-              ...records.settings[0],
-              focusTaskIds: records.settings[0].focusTaskIds.filter(taskId => taskId !== id),
-            },
-          });
-        for (const key of ["tasks", "projects", "routines"] as const)
-          for (const row of records[key])
-            if (
-              row.id !== id &&
-              (row.goalId === id ||
-                ("projectId" in row && row.projectId === id))
-            )
-              changes.push({
-                store: key,
-                row: {
-                  ...row,
-                  ...(row.goalId === id ? { goalId: undefined } : {}),
-                  ...("projectId" in row && row.projectId === id
-                    ? { projectId: undefined }
-                    : {}),
-                },
-              });
-        return changes;
+      {
+        read: [
+          "tasks", "projects", "routines",
+          ...(type === "note" ? [{ store: "notes" as const, key: id }] : []),
+          ...(type === "goal" ? [{ store: "goals" as const, key: id }] : []),
+          ...(type === "task" ? [{ store: "settings" as const, key: "settings" }] : []),
+        ],
+        write: [entityStores[type], "tasks", "projects", "routines", "settings", "logs"],
       },
+      (records) => deleteEntityCommand(records, type, id, logicalDay),
     );
   }
   async function toggleRoutineCompletionForDay(
@@ -541,7 +486,10 @@ export function useAppData() {
       )
     )
       return;
-    await mutate(["completions", "routines"], (records) => {
+    await mutate({
+      read: [{ store: "completions", index: "by-date", key: day }, { store: "routines", key: id }],
+      write: ["completions", "logs"],
+    }, (records) => {
       const routine = findEntity(records, "routine", id);
       if (fromToday && routine.status !== "enabled")
         throw new Error("Unarchive this routine before completing it.");
@@ -549,7 +497,10 @@ export function useAppData() {
         (c) =>
           c.entityType === "routine" && c.entityId === id && c.date === day,
       );
-      return matches.length
+      // If another tab already performed the action that was presented, do
+      // not turn a second tap into the opposite action.
+      if (existing !== (matches.length > 0)) return [];
+      return existing
         ? [
             ...matches.map((c) => ({
               store: "completions" as const,
@@ -586,7 +537,7 @@ export function useAppData() {
     checked: boolean,
     revision?: string,
   ) {
-    await mutate(["projects"], (records) =>
+    await mutate({ read: [{ store: "projects", key: id }], write: ["projects", "logs"] }, (records) =>
       projectTodoCommand(records, id, index, { checked }, logicalDay, revision),
     );
   }
@@ -596,7 +547,7 @@ export function useAppData() {
     text: string,
     revision?: string,
   ) {
-    await mutate(["projects"], (records) =>
+    await mutate({ read: [{ store: "projects", key: id }], write: ["projects", "logs"] }, (records) =>
       projectTodoCommand(records, id, index, { text }, logicalDay, revision),
     );
   }
@@ -613,25 +564,22 @@ export function useAppData() {
     });
   }
   async function saveWeeklyReview(
-    input: Omit<WeeklyReview, "id" | "createdAt">,
+    weekKey: string,
+    fields: ReviewFields,
+    baseline: WeeklyReview | undefined,
   ) {
-    await mutate(["reviews"], (records) => {
-      const previous = records.reviews.find(
-        (row) => row.weekKey === input.weekKey,
-      );
-      const review = {
-        ...input,
-        id: previous?.id ?? uid("review"),
-        createdAt: previous?.createdAt ?? nowIso(),
-      };
-      return [
-        { store: "reviews", row: review },
-        event("review", "weekly", review.id, input.weekKey),
-      ];
-    });
+    try {
+      await mutate({
+        read: [{ store: "reviews", index: "by-week", key: weekKey }],
+        write: ["reviews", "logs"],
+      }, (records) => weeklyReviewCommand(records, weekKey, fields, baseline));
+    } catch (error) {
+      if (error instanceof WeeklyReviewConflict) await reloadAll();
+      throw error;
+    }
   }
   async function setSettings(patch: Partial<AppSettings>) {
-    await mutate(["settings"], (records) => [
+    await mutate({ read: [{ store: "settings", key: "settings" }], write: ["settings"] }, (records) => [
       { store: "settings", row: { ...records.settings[0], ...patch } },
     ]);
   }
@@ -664,7 +612,7 @@ export function useAppData() {
   }
   async function importData(file: File) {
     try {
-      const data = parseBackup(JSON.parse(await file.text()));
+      const data = parseBackupJson(await file.text());
       const counts = dataStores
         .map((key) => `${data[key].length} ${key}`)
         .join(", ");
@@ -681,9 +629,9 @@ export function useAppData() {
         )
       )
         await exportData();
-      await replaceSnapshot(await openDb(), data);
+      await run(async () => replaceSnapshot(await openDb(), data));
       await reloadAll();
-      channelRef.current?.postMessage("changed");
+      notifyReplacement();
       return true;
     } catch (error) {
       const message = `Import failed; your existing data was not replaced. ${error instanceof Error ? error.message : "Invalid file."}`;
@@ -698,25 +646,29 @@ export function useAppData() {
       )
     )
       return;
-    await clearDatabase(await openDb());
+    await run(async () => clearDatabase(await openDb()));
     await reloadAll();
     setNoteInput("");
     setFilters({ ...defaultFilters });
-    channelRef.current?.postMessage("changed");
+    notifyReplacement();
   }
   const activeTasks = useMemo(
     () => sortTasks(state.tasks, "actionable", logicalDay),
     [state.tasks, logicalDay],
   );
-  const eligibleTasks = activeTasks.filter(
-    (task) =>
-      !task.projectId ||
-      !["archived", "done"].includes(
-        state.projects.find((project) => project.id === task.projectId)
-          ?.status ?? "",
-      ),
+  const projectById = useMemo(
+    () => new Map(state.projects.map((project) => [project.id, project])),
+    [state.projects],
   );
-  const todayTop3 = settings.focusTaskIds
+  const dayCompletions = useMemo(
+    () => completionsForDay(state.completions, logicalDay),
+    [state.completions, logicalDay],
+  );
+  const eligibleTasks = useMemo(() => activeTasks.filter(
+    (task) => !task.projectId ||
+      !["archived", "done"].includes(projectById.get(task.projectId)?.status ?? ""),
+  ), [activeTasks, projectById]);
+  const todayTop3 = useMemo(() => settings.focusTaskIds
     .flatMap((id) =>
       eligibleTasks.filter(
         (task) =>
@@ -724,10 +676,10 @@ export function useAppData() {
           (!task.scheduledFor || task.scheduledFor <= logicalDay),
       ),
     )
-    .slice(0, 3);
-  const urgentTasks = activeTasks.filter(
+    .slice(0, 3), [settings.focusTaskIds, eligibleTasks, logicalDay]);
+  const urgentTasks = useMemo(() => activeTasks.filter(
     (task) => task.deadline && task.deadline <= logicalDay && !todayTop3.some(focus => focus.id === task.id),
-  );
+  ), [activeTasks, logicalDay, todayTop3]);
   const primaryMetric = (goal: Goal) =>
     goal.metrics.find((metric) => metric.id === goal.primaryMetricId) ??
     goal.metrics[0];
@@ -738,6 +690,9 @@ export function useAppData() {
   return {
     state,
     loaded,
+    logsReady,
+    reviewReady,
+    setWantsChartHistory,
     error,
     setError,
     busy: busy > 0,
@@ -794,19 +749,16 @@ export function useAppData() {
       [state.goals, effectiveFilters.goals],
     ),
     filteredRoutines: useMemo(
-      () => sortRoutines(state.routines, state.completions, effectiveFilters.routines, logicalDay),
-      [state.routines, state.completions, effectiveFilters.routines, logicalDay],
+      () => sortRoutines(state.routines, dayCompletions.routines, effectiveFilters.routines),
+      [state.routines, dayCompletions.routines, effectiveFilters.routines],
     ),
     linkableGoals: state.goals.filter(isOpen),
     linkableProjects: state.projects.filter(isOpen),
     activeNoteCount: state.notes.filter((note) => note.status === "inbox")
       .length,
-    completedTodayCount: state.completions.filter(
-      (c) => c.date === logicalDay && c.entityType === "task",
-    ).length,
-    routinesTodayCount: state.completions.filter(
-      (c) => c.date === logicalDay && c.entityType === "routine",
-    ).length,
+    completedTodayCount: dayCompletions.taskCount,
+    routinesTodayCount: dayCompletions.routineCount,
+    projectById,
     activeTasks,
     todayTop3,
     urgentTasks,
@@ -817,9 +769,9 @@ export function useAppData() {
         (!task.scheduledFor || task.scheduledFor <= logicalDay),
     ),
     statusLabel: (row: Pick<BaseEntity, "status" | "id">) =>
-      row.status === "enabled" && routineCompletedToday(state.completions, row.id, logicalDay)
+      row.status === "enabled" && dayCompletions.routines.has(row.id)
         ? "Completed" : statusLabel(row.status),
-    isRoutineCompletedToday: (id: string) => routineCompletedToday(state.completions, id, logicalDay),
+    isRoutineCompletedToday: (id: string) => dayCompletions.routines.has(id),
     addNote,
     updateEntity,
     createTask,
@@ -838,7 +790,7 @@ export function useAppData() {
     toggleProjectTodo,
     editProjectTodo,
     addProjectTodo,
-    saveWeeklyReview,
+    weeklyReviewDrafts,
     exportData,
     importData,
     exportSafetySnapshot,

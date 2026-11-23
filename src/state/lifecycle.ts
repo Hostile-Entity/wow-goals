@@ -132,14 +132,25 @@ export function isUnfinished(item: Pick<BaseEntity, "status">): boolean {
   return isOpen(item);
 }
 
-export function routineCompletedToday(completions: DailyCompletion[], id: string, day: string) {
-  return completions.some(row => row.entityType === "routine" && row.entityId === id && row.date === day);
+export function completionsForDay(completions: DailyCompletion[], day: string) {
+  const routines = new Set<string>();
+  let taskCount = 0;
+  let routineCount = 0;
+  for (const row of completions) {
+    if (row.date !== day) continue;
+    if (row.entityType === "task") taskCount++;
+    if (row.entityType === "routine") {
+      routineCount++; // Preserve the counts of duplicate legacy completion rows.
+      routines.add(row.entityId);
+    }
+  }
+  return { routines, taskCount, routineCount };
 }
 
-export function sortRoutines(routines: Routine[], completions: DailyCompletion[], filter: StatusFilter, day: string) {
+export function sortRoutines(routines: Routine[], completed: ReadonlySet<string>, filter: StatusFilter) {
   if (filter !== "enabled" && filter !== "completed-today") return sortItems(routines, filter);
   return sortItems(routines, "enabled").filter(routine =>
-    routineCompletedToday(completions, routine.id, day) === (filter === "completed-today"));
+    completed.has(routine.id) === (filter === "completed-today"));
 }
 
 export function statusActionLabel(type: EntityType, current: ItemStatus, target: ItemStatus) {

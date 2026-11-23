@@ -3,6 +3,7 @@
     "composite": true,
     "skipLibCheck": true,
     "module": "ESNext",
+    "target": "ES2022",
     "moduleResolution": "Bundler",
     "allowSyntheticDefaultImports": true,
     "strict": true

@@ -1,10 +1,19 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AppData, getStatusBucket } from "../state/useAppData";
 import { Note } from "../types";
 import { ItemTimestamp } from "../components/ItemTimestamp";
 import { ExpandableDescription } from "../components/ExpandableDescription";
-import { NoteMarkdown } from "../components/NoteMarkdown";
+
+function PlainNote({ text }: { text: string }) {
+  return <div className="note-markdown"><p>{text}</p></div>;
+}
+
+// A missing optional asset must not take the note list or editing offline.
+const NoteMarkdown = lazy(() => import("../components/NoteMarkdown").then(
+  ({ NoteMarkdown }) => ({ default: NoteMarkdown }),
+  () => ({ default: PlainNote }),
+));
 
 interface NotesTabProps {
   filteredNotes: AppData["filteredNotes"];
@@ -48,7 +57,9 @@ const NoteCard = memo(function NoteCard({
           <div className="title note-title">{note.title}</div>
           {note.description ? (
             <ExpandableDescription className="note-description">
-              <NoteMarkdown text={note.description} />
+              <Suspense fallback={<PlainNote text={note.description} />}>
+                <NoteMarkdown text={note.description} />
+              </Suspense>
             </ExpandableDescription>
           ) : null}
         </div>

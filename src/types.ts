@@ -76,6 +76,7 @@ export interface DailyCompletion {
 
 export interface WeeklyReview {
   id: string;
+  revision?: string;
   weekKey: string;
   inboxCleared: boolean;
   tasksPrioritized: boolean;

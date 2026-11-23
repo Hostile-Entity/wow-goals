@@ -35,12 +35,12 @@ function previousData() {
   data.settings.focusTaskIds = ["task-a", "task-b"];
   return data;
 }
-async function seedV4(page: Page, keyless = false) {
+async function seedV4(page: Page, keyless = false, futureVersion?: number) {
   const data = previousData();
   await page.goto("icons/icon.svg");
-  await page.evaluate(async ({ data, keyless }) => {
+  await page.evaluate(async ({ data, keyless, futureVersion, futureSchema }) => {
     await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("wow-goals-db", 4);
+      const request = indexedDB.open("wow-goals-db", futureVersion ?? 4);
       request.onupgradeneeded = () => {
         for (const [name, values] of Object.entries(data)) {
           const store = request.result.createObjectStore(name, keyless ? undefined : { keyPath: "id" });
@@ -50,11 +50,16 @@ async function seedV4(page: Page, keyless = false) {
         const meta = request.result.createObjectStore("meta", { keyPath: "id" });
         for (const id of ["pre-v2", "pre-v3", "pre-v4"])
           meta.put({ id, data: { original: id, keep: true } });
+        if (futureVersion !== undefined) {
+          meta.put({ id: "status-schema", data: futureSchema });
+          meta.put({ id: "pre-v5", data: { original: "pre-v5", keep: true } });
+          request.result.createObjectStore("future-only").put("future record", "keep");
+        }
       };
       request.onsuccess = () => { request.result.close(); resolve(); };
       request.onerror = () => reject(request.error);
     });
-  }, { data, keyless });
+  }, { data, keyless, futureVersion, futureSchema: DB_VERSION + 1 });
   return data;
 }
 async function snapshot(page: Page, template: AppStateData) {
@@ -115,6 +120,30 @@ for (const keyless of [false, true]) {
   });
 }
 
+for (const version of [DB_VERSION - 1, DB_VERSION + 1]) {
+  test(`newer logical schema shows the load error without touching physical version ${version}`, async ({ page }) => {
+    const before = await seedV4(page, false, version);
+    const oldMeta = await records(page, "meta");
+    await page.goto("./");
+    await expect(page.getByRole("alert")).toContainText("newer WowGoals schema");
+    await page.getByRole("button", { name: "Retry opening data", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("newer WowGoals schema");
+    await expect(page.getByRole("heading", { name: "Today", exact: true })).not.toBeVisible();
+    expect(canonical(await snapshot(page, before))).toEqual(canonical(before));
+    expect(await records(page, "meta")).toEqual(oldMeta);
+    expect(await records(page, "future-only")).toEqual(["future record"]);
+    expect(await page.evaluate(() => new Promise<number>((resolve, reject) => {
+      const request = indexedDB.open("wow-goals-db");
+      request.onsuccess = () => {
+        const db = request.result;
+        resolve(db.version);
+        db.close();
+      };
+      request.onerror = () => reject(request.error);
+    }))).toBe(version);
+  });
+}
+
 test("a late v4 upgrade quota failure leaves the complete original database intact and retry succeeds", async ({ page }) => {
   const before = await seedV4(page);
   const oldMeta = await records(page, "meta");
@@ -122,8 +151,8 @@ test("a late v4 upgrade quota failure leaves the complete original database inta
     (window as any).__failMigration = true;
     const put = IDBObjectStore.prototype.put;
     IDBObjectStore.prototype.put = function(...args: Parameters<IDBObjectStore["put"]>) {
-      // Settings is written after all entity/history writes and the safety snapshot.
-      if (this.name === "settings" && (window as any).__failMigration)
+      // The logical marker is written after all changed rows and the safety snapshot.
+      if (this.name === "meta" && args[0]?.id === "status-schema" && (window as any).__failMigration)
         throw new DOMException("Simulated quota exceeded during upgrade", "QuotaExceededError");
       return put.apply(this, args);
     };

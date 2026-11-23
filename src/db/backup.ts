@@ -1,7 +1,7 @@
 import { AppStateData, EntityType } from "../types";
 import { entityStores, lifecycle } from "../state/lifecycle";
-import { dataStores, DB_VERSION, migrateV1, migrateV2 } from "./schema";
-import { legacyLifecycle, migrateStatuses } from "./statuses";
+import { dataStores, DB_VERSION, migrateLegacy } from "./schema";
+import { legacyLifecycle } from "./statuses";
 
 export const backupPayload = (data: AppStateData) => ({
   app: "wow-goals" as const,
@@ -24,6 +24,18 @@ const day = (value: unknown) =>
 
 /** Validate before ANY destructive writes. Also accepts the single user's old exported backup. */
 export function parseBackup(raw: unknown): AppStateData {
+  // Callers may reuse an input object; keep the returned data independent.
+  const { data, version } = validateBackup(raw);
+  return migrateLegacy(structuredClone(data), version);
+}
+
+export function parseBackupJson(json: string): AppStateData {
+  // JSON.parse already allocated a private copy; preserve untouched rows by reference.
+  const { data, version } = validateBackup(JSON.parse(json));
+  return migrateLegacy(data, version);
+}
+
+function validateBackup(raw: unknown): { data: AppStateData; version: number } {
   if (
     !object(raw) ||
     raw.app !== "wow-goals" ||
@@ -135,7 +147,8 @@ export function parseBackup(raw: unknown): AppStateData {
         review.goalsChecked,
       ].every((v) => typeof v === "boolean") ||
       !text(review.note) ||
-      !dateTime(review.createdAt)
+      !dateTime(review.createdAt) ||
+      (review.revision !== undefined && !text(review.revision))
     )
       fail("invalid review");
   for (const log of data.logs)
@@ -180,22 +193,17 @@ export function parseBackup(raw: unknown): AppStateData {
         fail("invalid project reference");
     }
   // Dangling legacy references can result from permanent deletion. Preserve and report them, never erase their records.
-  const upgraded = raw.schemaVersion === 1
-    ? migrateV1(data as AppStateData)
-    : raw.schemaVersion === 2 || raw.schemaVersion === 3
-      ? migrateV2(data as AppStateData)
-      : (structuredClone(data) as AppStateData);
-  return raw.schemaVersion < 5 ? migrateStatuses(upgraded) : upgraded;
+  return { data: data as AppStateData, version: raw.schemaVersion };
 }
 
 export function danglingReferences(data: AppStateData): number {
   const goals = new Set(data.goals.map((item) => item.id));
   const projects = new Set(data.projects.map((item) => item.id));
-  return (
-    [...data.tasks, ...data.projects, ...data.routines].filter(
-      (row) => row.goalId && !goals.has(row.goalId),
-    ).length +
-    data.tasks.filter((row) => row.projectId && !projects.has(row.projectId))
-      .length
-  );
+  let count = 0;
+  for (const rows of [data.tasks, data.projects, data.routines])
+    for (const row of rows)
+      if (row.goalId && !goals.has(row.goalId)) count++;
+  for (const row of data.tasks)
+    if (row.projectId && !projects.has(row.projectId)) count++;
+  return count;
 }

@@ -24,7 +24,7 @@ const canonical = (value: AppStateData) => {
     if (Array.isArray(rows)) rows.sort((a, b) => a.id.localeCompare(b.id));
   return copy;
 };
-async function seed(version = 4) {
+async function seed(version = 4, schema?: number, indexed = false) {
   const name = `status-upgrade-${crypto.randomUUID()}`;
   const data = oldData();
   await new Promise<void>((resolve, reject) => {
@@ -33,9 +33,13 @@ async function seed(version = 4) {
       for (const [name, rows] of Object.entries(data)) {
         const store = request.result.createObjectStore(name, { keyPath: "id" });
         for (const row of Array.isArray(rows) ? rows : [rows]) store.put(row);
+        if (indexed && name === "completions") store.createIndex("by-date", "date");
+        if (indexed && name === "reviews") store.createIndex("by-week", "weekKey");
       }
       const meta = request.result.createObjectStore("meta", { keyPath: "id" });
       meta.put({ id: "pre-v4", data: "original interface-upgrade snapshot" });
+      meta.put({ id: "pre-v5", data: "original status-upgrade snapshot" });
+      if (schema !== undefined) meta.put({ id: "status-schema", data: schema });
     };
     request.onsuccess = () => { request.result.close(); resolve(); };
     request.onerror = () => reject(request.error);
@@ -45,6 +49,11 @@ async function seed(version = 4) {
 const metadata = (db: IDBDatabase) => new Promise<any[]>(resolve => {
   const request = db.transaction("meta").objectStore("meta").getAll();
   request.onsuccess = () => resolve(request.result);
+});
+const openRaw = (name: string) => new Promise<IDBDatabase>((resolve, reject) => {
+  const request = indexedDB.open(name);
+  request.onsuccess = () => resolve(request.result);
+  request.onerror = () => reject(request.error);
 });
 
 describe("status schema upgrade", () => {
@@ -91,6 +100,54 @@ describe("status schema upgrade", () => {
     reopened.close();
   });
 
+  it.each([DB_VERSION - 1, DB_VERSION, DB_VERSION + 1])(
+    "leaves future logical schemas untouched at physical version %s",
+    async (version) => {
+      const { name, data } = await seed(version, DB_VERSION + 1);
+      await expect(openDatabase(name)).rejects.toThrow("newer WowGoals schema");
+      const db = await openRaw(name);
+      try {
+        expect(db.version).toBe(version);
+        expect(canonical(await readSnapshot(db))).toEqual(canonical(data));
+        expect(await metadata(db)).toEqual([
+          { id: "pre-v4", data: "original interface-upgrade snapshot" },
+          { id: "pre-v5", data: "original status-upgrade snapshot" },
+          { id: "status-schema", data: DB_VERSION + 1 },
+        ]);
+      } finally {
+        db.close();
+      }
+    },
+  );
+
+  it("opens a higher physical version with the current logical marker without repairing it", async () => {
+    const { name } = await seed(9, DB_VERSION, true);
+    const db = await openDatabase(name);
+    try {
+      expect(db.version).toBe(9);
+      expect((await metadata(db)).find(row => row.id === "pre-v5").data)
+        .toBe("original status-upgrade snapshot");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("adds missing indexes without rewriting current-schema data or recovery snapshots", async () => {
+    const { name, data } = await seed(9, DB_VERSION);
+    const db = await openDatabase(name);
+    try {
+      expect(db.version).toBe(10);
+      const tx = db.transaction(["reviews", "completions"]);
+      expect(tx.objectStore("reviews").indexNames.contains("by-week")).toBe(true);
+      expect(tx.objectStore("completions").indexNames.contains("by-date")).toBe(true);
+      expect(canonical(await readSnapshot(db))).toEqual(canonical(data));
+      expect((await metadata(db)).find(row => row.id === "pre-v5").data)
+        .toBe("original status-upgrade snapshot");
+    } finally {
+      db.close();
+    }
+  });
+
   it("rolls back partial status writes and metadata on failure, then retries safely", async () => {
     const { name, data } = await seed();
     const put = IDBObjectStore.prototype.put;
@@ -100,13 +157,11 @@ describe("status schema upgrade", () => {
     });
     await expect(openDatabase(name)).rejects.toThrow("status migration write failed");
     spy.mockRestore();
-    const old = await new Promise<IDBDatabase>(resolve => {
-      const request = indexedDB.open(name);
-      request.onsuccess = () => resolve(request.result);
-    });
+    const old = await openRaw(name);
     expect(old.version).toBe(4);
     expect(canonical(await readSnapshot(old))).toEqual(canonical(data));
-    expect((await metadata(old)).some(row => row.id === "pre-v5")).toBe(false);
+    expect((await metadata(old)).find(row => row.id === "pre-v5").data)
+      .toBe("original status-upgrade snapshot");
     old.close();
     const retry = await openDatabase(name);
     expect(canonical(await readSnapshot(retry))).toEqual(canonical(migrateStatuses(data)));

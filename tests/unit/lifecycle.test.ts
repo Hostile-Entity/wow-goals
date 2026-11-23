@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import {
-  defaultFilters, filterLabel, filterOptions, isOpen, lifecycle, savedStatusFilter,
+  completionsForDay, defaultFilters, filterLabel, filterOptions, isOpen, lifecycle, savedStatusFilter,
   sortItems, sortRoutines, statusActionLabel, statusLabel,
 } from "../../src/state/lifecycle";
 import { migrateV1 } from "../../src/db/schema";
@@ -73,13 +73,14 @@ describe("simplified lifecycle", () => {
       id: "today", entityType: "routine" as const, entityId: routine.id,
       date: "2026-11-13", completedAt: "2026-11-13T12:00:00Z",
     }];
-    expect(sortRoutines(state.routines, completions, "enabled", "2026-11-13")).toEqual([]);
-    expect(sortRoutines(state.routines, completions, "completed-today", "2026-11-13")).toEqual([routine]);
-    expect(sortRoutines(state.routines, completions, "enabled", "2026-11-14")).toEqual([routine]);
-    expect(sortRoutines(state.routines, completions, "completed-today", "2026-11-14")).toEqual([]);
+    const ids = (day: string) => completionsForDay(completions, day).routines;
+    expect(sortRoutines(state.routines, ids("2026-11-13"), "enabled")).toEqual([]);
+    expect(sortRoutines(state.routines, ids("2026-11-13"), "completed-today")).toEqual([routine]);
+    expect(sortRoutines(state.routines, ids("2026-11-14"), "enabled")).toEqual([routine]);
+    expect(sortRoutines(state.routines, ids("2026-11-14"), "completed-today")).toEqual([]);
     routine.status = "archived";
-    expect(sortRoutines(state.routines, completions, "completed-today", "2026-11-13")).toEqual([]);
-    expect(sortRoutines(state.routines, completions, "all", "2026-11-13")).toHaveLength(2);
+    expect(sortRoutines(state.routines, ids("2026-11-13"), "completed-today")).toEqual([]);
+    expect(sortRoutines(state.routines, ids("2026-11-13"), "all")).toHaveLength(2);
     expect(completions).toHaveLength(1);
   });
 
