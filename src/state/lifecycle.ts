@@ -1,7 +1,7 @@
 import { BaseEntity, DailyCompletion, EntityType, ItemStatus, Routine, Task } from "../types";
 
 export type FilterKey = "notes" | "tasks" | "projects" | "routines" | "goals";
-// "actionable" is internal (Today), not a selectable status/view.
+// "actionable" groups open work for Today and its shortcut, not the Tasks menu.
 export type StatusFilter = "all" | "actionable" | "completed-today" | ItemStatus;
 export const entityStores = {
   note: "notes",
@@ -62,8 +62,9 @@ export function statusLabel(status: ItemStatus): string {
 export function filterLabel(key: FilterKey, value: StatusFilter): string {
   if (value === "all") return "All items";
   if (value === "completed-today") return "Completed";
-  if (value !== "actionable") return statusLabel(value);
-  return statusLabel(defaultFilters[key] as ItemStatus);
+  return value === "actionable"
+    ? key === "tasks" ? "Open tasks" : statusLabel(defaultFilters[key] as ItemStatus)
+    : statusLabel(value);
 }
 export function isOpen(item: Pick<BaseEntity, "status">): boolean {
   return ["inbox", "reference", "open", "doing", "planned", "active", "enabled"].includes(
@@ -121,12 +122,24 @@ export function sortTasks(
         a.priority - b.priority ||
         (a.legacyPriority ?? a.priority) - (b.legacyPriority ?? b.priority) ||
         (a.deadline ?? "9999").localeCompare(b.deadline ?? "9999") ||
-        b.updatedAt.localeCompare(a.updatedAt)
+        b.updatedAt.localeCompare(a.updatedAt) ||
+        a.id.localeCompare(b.id)
       );
     });
 }
-export const priorityLabel = (priority: number) =>
-  priority === 1 ? "High" : priority === 3 ? "Low" : "Normal";
+export const taskPriorities = [
+  { value: 1, label: "High", tone: "high" },
+  { value: 2, label: "Normal", tone: "normal" },
+  { value: 3, label: "Low", tone: "low" },
+  { value: 4, label: "Optional", tone: "optional" },
+] as const;
+
+export function nextTasksByProject(sortedOpenTasks: Task[]) {
+  const next = new Map<string, Task>();
+  for (const task of sortedOpenTasks)
+    if (task.projectId && !next.has(task.projectId)) next.set(task.projectId, task);
+  return next;
+}
 
 export function isUnfinished(item: Pick<BaseEntity, "status">): boolean {
   return isOpen(item);

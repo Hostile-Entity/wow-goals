@@ -63,6 +63,7 @@ test("Today reads one completion day and no audit history, while Review, Complet
   });
   const reads = () => page.evaluate(() => (window as unknown as { reads: string[] }).reads);
   await page.goto("./");
+  await tab(page, "Today").click();
   await expect(count(page)).toHaveText("1 tasks done · 2 routines done · 0 notes in inbox");
   expect(await reads()).toContain(`by-date:${DAY}`);
   expect(await reads()).not.toContain("all:logs");
@@ -93,6 +94,7 @@ test("resuming Today reconciles missed writes and the new logical day", async ({
   await page.addInitScript(() => { Object.defineProperty(window, "BroadcastChannel", { value: undefined }); });
   await page.clock.setFixedTime(new Date(NOW));
   await page.goto("./");
+  await tab(page, "Today").click();
   await expect(count(page)).toContainText("0 tasks done");
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -135,12 +137,12 @@ test("import and reset reconcile all data in another tab", async ({ page, contex
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify({ app: "wow-goals", schemaVersion: 1, data: fixture })),
   });
-  await expect(page.getByRole("button", { name: "Triage: Restored in another tab" })).toBeVisible();
+  await expect(page.getByText(/1 untriaged notes/)).toBeVisible();
   writer.off("dialog", confirmRestore);
 
   await expect(page.locator(".review-grid").getByText("Read daily", { exact: true })).toBeVisible();
   writer.once("dialog", (dialog) => dialog.accept());
   await writer.getByRole("button", { name: "Delete all data", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Triage: Restored in another tab" })).not.toBeVisible();
+  await expect(page.getByText(/0 untriaged notes/)).toBeVisible();
   await expect(page.locator(".review-grid").getByText("Read daily", { exact: true })).not.toBeVisible();
 });

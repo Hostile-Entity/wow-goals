@@ -41,7 +41,7 @@ test("a week keeps its unsaved reflection, checklist and edit mode through a cro
   await tab(other, "Notes").click();
   await other.getByRole("textbox", { name: "Add a note..." }).fill("Note from another tab");
   await other.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Triage: Note from another tab" })).toBeVisible();
+  await expect(page.getByText(/2 untriaged notes/)).toBeVisible();
   await expect(reflection(page)).toHaveValue("Unsaved reflection");
   await expect(goalsChecked(page)).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "Tasks prioritized" })).toBeChecked();

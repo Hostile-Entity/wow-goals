@@ -1,4 +1,4 @@
-import { BaseEntity, EntityType } from "../types";
+import { BaseEntity, EntityType, ItemStatus } from "../types";
 import { AppData } from "../state/useAppData";
 import { lifecycle, statusActionLabel } from "../state/lifecycle";
 import { useAction } from "./useAction";
@@ -8,6 +8,9 @@ export function EntityActions({
   entity,
   app,
   beforeAction,
+  onStatusChanged,
+  onDeleted,
+  statusRevision,
 }: {
   type: EntityType;
   entity: BaseEntity;
@@ -16,10 +19,13 @@ export function EntityActions({
     "setStatus" | "permanentDelete" | "completeRoutine" | "isRoutineCompletedToday"
   >;
   beforeAction?: () => boolean;
+  onStatusChanged?: (status: ItemStatus) => void;
+  onDeleted?: () => void;
+  statusRevision?: string;
 }) {
   const action = useAction();
-  const run = (operation: () => Promise<unknown>) => {
-    if (!beforeAction || beforeAction()) void action.run(operation);
+  const run = (operation: () => Promise<unknown>, after?: () => void) => {
+    if (!beforeAction || beforeAction()) void action.run(operation, after);
   };
   return (
     <>
@@ -39,7 +45,7 @@ export function EntityActions({
               key={status}
               disabled={action.pending}
               onClick={() =>
-                run(() => app.setStatus(type, entity.id, status))
+                run(() => app.setStatus(type, entity.id, status, statusRevision), () => onStatusChanged?.(status))
               }
             >
               {statusActionLabel(type, entity.status, status)}
@@ -56,7 +62,7 @@ export function EntityActions({
         <button
           className="danger"
           disabled={action.pending}
-          onClick={() => run(() => app.permanentDelete(type, entity.id))}
+          onClick={() => run(() => app.permanentDelete(type, entity.id), onDeleted)}
         >
           Delete
         </button>

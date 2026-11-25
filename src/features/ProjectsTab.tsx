@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { AppData, formatDueLabel, getStatusBucket } from "../state/useAppData";
-import { projectTodos } from "../state/projectTodos";
 import { Project } from "../types";
-import { ItemTimestamp } from "../components/ItemTimestamp";
+import { ItemCard } from "../components/ItemCard";
+import { ProjectNextTask } from "../components/ProjectNextTask";
 
 interface Props {
   filteredProjects: AppData["filteredProjects"];
@@ -10,6 +10,8 @@ interface Props {
   logicalDay: string;
   showStatus: boolean;
   statusLabel: AppData["statusLabel"];
+  nextProjectTasks: AppData["nextProjectTasks"];
+  onOpenTask(id: string): void;
   onManage(project: Project): void;
 }
 export function ProjectsTab({
@@ -18,6 +20,8 @@ export function ProjectsTab({
   logicalDay,
   showStatus,
   statusLabel,
+  nextProjectTasks,
+  onOpenTask,
   onManage,
 }: Props) {
   const goalById = useMemo(
@@ -34,51 +38,38 @@ export function ProjectsTab({
       )}
       {filteredProjects.map((project) => {
         const bucket = getStatusBucket(project);
-        const remaining = projectTodos(project.description).filter(
-          (todo) => !todo.checked,
-        ).length;
+        const details = [
+          project.deadline && formatDueLabel(project.deadline, logicalDay),
+          project.goalId && (goalById.get(project.goalId) ?? "Unknown goal"),
+        ].filter(Boolean).join(" · ");
         return (
-          <article
+          <ItemCard
             key={project.id}
-            id={`item-project-${project.id}`}
-            className={`card entity-card ${bucket === "in_progress" ? "is-in-progress" : bucket !== "active" ? "is-dimmed" : ""}`}
+            type="project"
+            entity={project}
+            className={bucket === "in_progress" ? "is-in-progress" : bucket !== "active" ? "is-dimmed" : ""}
+            actions={
+              <button className="manage-btn" onClick={() => onManage(project)}>Open</button>
+            }
           >
-            <div className="card-top-row">
-              <div className="entity-main">
-                <div className="title entity-title">{project.title}</div>
-                <p className="project-summary">
-                  {project.summary || "No short description yet."}
-                </p>
-                <div className="tags entity-summary">
-                  {remaining} TODOs left
-                </div>
-              </div>
-              <div className="entity-side">
-                <button
-                  className="manage-btn"
-                  onClick={() => onManage(project)}
-                >
-                  Open
-                </button>
-              </div>
-            </div>
-            <div className="card-footer">
+            <div className="title entity-title">{project.title}</div>
+            <p className="project-summary">
+              {project.summary || "No short description yet."}
+            </p>
+            {project.status === "active" && (
+              <ProjectNextTask task={nextProjectTasks.get(project.id)} onOpen={onOpenTask} />
+            )}
+            {(showStatus || details) && (
               <div className="card-footer-left">
                 {showStatus && (
                   <div className="tags entity-status entity-footer-meta">
                     {statusLabel(project)}
                   </div>
                 )}
-                <div className="tags entity-summary entity-footer-meta">
-                  {[
-                    project.deadline && formatDueLabel(project.deadline, logicalDay),
-                    project.goalId && (goalById.get(project.goalId) ?? "Unknown goal"),
-                  ].filter(Boolean).join(" · ")}
-                </div>
+                {details && <div className="tags entity-summary entity-footer-meta">{details}</div>}
               </div>
-              <ItemTimestamp entity={project} />
-            </div>
-          </article>
+            )}
+          </ItemCard>
         );
       })}
     </div>

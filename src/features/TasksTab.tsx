@@ -1,10 +1,11 @@
 import { useMemo } from "react";
-import { AppData, formatDueLabel, getStatusBucket } from "../state/useAppData";
+import { AppData, getStatusBucket } from "../state/useAppData";
 import { Task } from "../types";
-import { priorityLabel } from "../state/lifecycle";
+import { taskPriorities } from "../state/lifecycle";
 import { useAction } from "../components/useAction";
-import { ItemTimestamp } from "../components/ItemTimestamp";
+import { ItemCard } from "../components/ItemCard";
 import { ExpandableDescription } from "../components/ExpandableDescription";
+import { TaskDeadline } from "../components/TaskDeadline";
 
 interface TasksTabProps {
   filteredTasks: AppData["filteredTasks"];
@@ -42,6 +43,12 @@ export function TasksTab({
       {action.error && <p className="action-error" role="alert">{action.error}</p>}
       {filteredTasks.map((task) => {
         const bucket = getStatusBucket(task);
+        const priority = taskPriorities.find(({ value }) => value === task.priority) ?? taskPriorities[1];
+        const details = [
+          task.scheduledFor && `Planned for ${task.scheduledFor}`,
+          task.projectId && (projectById.get(task.projectId) ?? "Unknown project"),
+          task.goalId && (goalById.get(task.goalId) ?? "Unknown goal"),
+        ].filter(Boolean).join(" · ");
         const cardToneClass =
           bucket === "in_progress"
             ? "is-in-progress"
@@ -50,49 +57,41 @@ export function TasksTab({
               : "";
 
         return (
-          <article
+          <ItemCard
             key={task.id}
-            id={`item-task-${task.id}`}
-            className={`card entity-card ${cardToneClass}`}
-          >
-            <div className="card-top-row">
-              <div className="entity-main">
-                <div className="title entity-title">{task.title}</div>
-                {task.description ? (
-                  <ExpandableDescription className="entity-description">
-                    {task.description}
-                  </ExpandableDescription>
-                ) : null}
-              </div>
-              <div className="entity-side">
+            type="task"
+            entity={task}
+            accessibleLabel={`${task.title}, ${priority.label.toLowerCase()} priority`}
+            className={`task-priority-${priority.tone} ${cardToneClass}`}
+            actions={
+              <>
                 <button className="manage-btn" onClick={() => onManage(task)}>
                   Edit
                 </button>
                 {["open", "doing"].includes(task.status) &&
                   <button className="complete-task-btn" aria-label={`Complete ${task.title}`} disabled={action.pending}
                     onClick={() => void action.run(() => onComplete(task.id))}>Done</button>}
-              </div>
-            </div>
-            <div className="card-footer">
+              </>
+            }
+          >
+            <div className="title entity-title">{task.title}</div>
+            {task.description && (
+              <ExpandableDescription className="entity-description" previewLines={5}>
+                {task.description}
+              </ExpandableDescription>
+            )}
+            {(showStatus || details || task.deadline) && (
               <div className="card-footer-left">
-                {showStatus ? (
+                {showStatus && (
                   <div className="tags entity-status entity-footer-meta">
                     {statusLabel(task)}
                   </div>
-                ) : null}
-                <div className="tags entity-summary entity-footer-meta">
-                  {[
-                    priorityLabel(task.priority),
-                    task.deadline && formatDueLabel(task.deadline, logicalDay),
-                    task.scheduledFor && `Planned for ${task.scheduledFor}`,
-                    task.projectId && (projectById.get(task.projectId) ?? "Unknown project"),
-                    task.goalId && (goalById.get(task.goalId) ?? "Unknown goal"),
-                  ].filter(Boolean).join(" · ")}
-                </div>
+                )}
+                {details && <div className="tags entity-summary entity-footer-meta">{details}</div>}
+                {task.deadline && <TaskDeadline day={task.deadline} logicalDay={logicalDay} />}
               </div>
-              <ItemTimestamp entity={task} />
-            </div>
-          </article>
+            )}
+          </ItemCard>
         );
       })}
     </div>

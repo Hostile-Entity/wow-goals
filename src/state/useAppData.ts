@@ -52,6 +52,7 @@ import {
   getStatusBucket,
   isOpen,
   isUnfinished,
+  nextTasksByProject,
   sortItems,
   sortTasks,
   sortRoutines,
@@ -150,11 +151,11 @@ function download(value: unknown, name: string) {
 }
 export function useAppData(wantsLogs = false) {
   const [busy, setBusy] = useState(0);
-  const [tab, setTab] = useState<Tab>("today");
+  const [tab, setTab] = useState<Tab>("notes");
   const [moreTab, setMoreTab] = useState<MoreTab>("review");
   const [wantsChartHistory, setWantsChartHistory] = useState(false);
   const [filters, setFilters] = useState(savedFilters);
-  const [reveal, setReveal] = useState<FilterKey | null>(null);
+  const [viewOverride, setViewOverride] = useState<{ key: FilterKey; filter: StatusFilter } | null>(null);
   const [openFilterMenu, setOpenFilterMenu] = useState<FilterKey | null>(null);
   const [showSettingsPopup, setShowSettingsPopup] = useState(false);
   const [showDebugTools, setShowDebugTools] = useState(false);
@@ -214,10 +215,6 @@ export function useAppData(wantsLogs = false) {
       /* Do not block capture when session storage is unavailable. */
     }
   }, [noteInput]);
-  useEffect(() => {
-    setOpenFilterMenu(null);
-    setReveal(null);
-  }, [tab, moreTab]);
   useEffect(() => {
     if (loaded && navigator.storage?.persist)
       void navigator.storage.persist().catch(() => false);
@@ -343,15 +340,18 @@ export function useAppData(wantsLogs = false) {
   async function undoTriage(id: string) {
     const changes = await mutate(
       {
-        read: [{ store: "notes", key: id }, "tasks", "projects", "goals", "routines", "completions"],
+        read: [
+          { store: "notes", key: id }, { store: "settings", key: "settings" },
+          "tasks", "projects", "goals", "routines", "completions",
+        ],
         write: ["notes", "tasks", "projects", "goals", "routines", "logs"],
       },
       (records) => undoTriageCommand(records, id, logicalDay),
     );
     const restored = changes.find(change => change.store === "notes" && "row" in change);
-    if (restored && "row" in restored && "status" in restored.row) {
+    if (tab === "notes" && restored && "row" in restored && "status" in restored.row) {
       const status = restored.row.status;
-      setReveal(null);
+      setViewOverride(null);
       setFilters(current => ({ ...current, notes: status }));
     }
   }
@@ -420,7 +420,7 @@ export function useAppData(wantsLogs = false) {
       ];
     });
   }
-  async function setStatus(type: EntityType, id: string, status: ItemStatus) {
+  async function setStatus(type: EntityType, id: string, status: ItemStatus, revision?: string) {
     if (
       (type === "project" && status === "done") ||
       (type === "goal" && status === "achieved")
@@ -449,7 +449,7 @@ export function useAppData(wantsLogs = false) {
       ...(type === "project"
         ? { completedAt: status === "done" ? nowIso() : undefined }
         : {}),
-    }));
+    }), revision);
   }
   async function permanentDelete(type: EntityType, id: string) {
     if (
@@ -457,7 +457,7 @@ export function useAppData(wantsLogs = false) {
         "Delete permanently? This cannot be recovered from the app.",
       )
     )
-      return;
+      return false;
     await mutate(
       {
         read: [
@@ -656,6 +656,8 @@ export function useAppData(wantsLogs = false) {
     () => sortTasks(state.tasks, "actionable", logicalDay),
     [state.tasks, logicalDay],
   );
+  const nextProjectTasks = useMemo(() => nextTasksByProject(activeTasks), [activeTasks]);
+  const activeProjects = useMemo(() => sortItems(state.projects, "active"), [state.projects]);
   const projectById = useMemo(
     () => new Map(state.projects.map((project) => [project.id, project])),
     [state.projects],
@@ -685,7 +687,7 @@ export function useAppData(wantsLogs = false) {
     goal.metrics[0];
   const effectiveFilters = {
     ...filters,
-    ...(reveal ? { [reveal]: "all" as const } : {}),
+    ...(viewOverride ? { [viewOverride.key]: viewOverride.filter } : {}),
   };
   return {
     state,
@@ -698,18 +700,33 @@ export function useAppData(wantsLogs = false) {
     busy: busy > 0,
     reloadAll,
     tab,
-    setTab,
+    setTab: (next: Tab) => {
+      if (next !== tab) setViewOverride(null);
+      setOpenFilterMenu(null);
+      setTab(next);
+    },
     moreTab,
-    setMoreTab,
+    setMoreTab: (next: MoreTab) => {
+      if (next !== moreTab) setViewOverride(null);
+      setOpenFilterMenu(null);
+      setMoreTab(next);
+    },
     filters: effectiveFilters,
     setFilters,
     selectFilter: (key: FilterKey, value: StatusFilter) => {
-      setReveal(null);
+      setViewOverride(null);
       setFilters((current) => ({ ...current, [key]: value }));
     },
-    revealFilter: (key: FilterKey) => {
-      window.setTimeout(() => setReveal(key), 0);
+    revealFilter: (key: FilterKey) => setViewOverride({ key, filter: "all" }),
+    openTasks: () => {
+      setOpenFilterMenu(null);
+      setTab("tasks");
+      setViewOverride({ key: "tasks", filter: "actionable" });
     },
+    nextInboxNote: (excludedId?: string) =>
+      sortItems(stateRef.current.notes, "inbox").find(
+        (note) => note.id !== excludedId && !note.triagedTo,
+      ),
     openFilterMenu,
     setOpenFilterMenu,
     showSettingsPopup,
@@ -754,11 +771,13 @@ export function useAppData(wantsLogs = false) {
     ),
     linkableGoals: state.goals.filter(isOpen),
     linkableProjects: state.projects.filter(isOpen),
-    activeNoteCount: state.notes.filter((note) => note.status === "inbox")
+    activeNoteCount: state.notes.filter((note) => note.status === "inbox" && !note.triagedTo)
       .length,
     completedTodayCount: dayCompletions.taskCount,
     routinesTodayCount: dayCompletions.routineCount,
     projectById,
+    activeProjects,
+    nextProjectTasks,
     activeTasks,
     todayTop3,
     urgentTasks,

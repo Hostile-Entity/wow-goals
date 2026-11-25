@@ -184,28 +184,10 @@
   flex: 1;
 }
 
-.today-task-title {
-  margin-bottom: 3px;
-}
-
-.today-task-subtitle {
-  margin-bottom: 0;
-}
-
 .today-task-actions {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
-}
-
-.today-action-btn {
-  min-width: 72px;
-  padding: 5px 9px;
-  font-size: 0.72rem;
-}
-
-.today-action-postpone {
-  color: var(--wow-text-muted);
 }
 
 .checklist {
@@ -372,50 +354,8 @@
   margin-bottom: 0;
 }
 
-.note-card {
-  display: grid;
-  gap: 4px;
-}
-
-.card-top-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 10px;
-}
-
-.card-footer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 10px;
-}
-
-.card-footer-left {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.note-main {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
 .note-title {
   font-weight: 700;
-}
-
-.note-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0;
-  flex-shrink: 0;
-  width: max-content;
 }
 
 .note-status {
@@ -444,18 +384,6 @@
   margin-top: 4px;
 }
 
-.entity-card {
-  display: grid;
-  gap: 4px;
-}
-
-.entity-main {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
 .entity-title {
   font-weight: 700;
 }
@@ -466,15 +394,6 @@
 
 .entity-status {
   margin-bottom: 0;
-}
-
-.entity-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0;
-  flex-shrink: 0;
-  width: max-content;
 }
 
 .note-title,
@@ -749,34 +668,80 @@
 /* Repeated rows are not separate dialog sections. */
 .entity-detail > .modal-body > .detail-todo + .detail-todo { margin-top: 0; }
 .entity-detail > .modal-body > h4 + .detail-todo { margin-top: var(--space-heading); }
-.today-task-link { text-align: left; font-weight: 700; border: 0; background: transparent; padding-left: 0; }
 .note-side [role=toolbar] { flex-direction: column; }
-.today-task-link { max-width: 100%; overflow-wrap: anywhere; }
 .manage-btn, .note-side button, .today-task-actions button, .filter-btn, .filter-menu button, .more-tabs button { min-height: var(--button-height); }
 .routine-btn:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 
 .title { font-size: 1rem; line-height: 1.5; font-weight: 650; margin-bottom: 6px; }
 .tags, .meta-row { font-size: .8rem; line-height: 1.5; }
-.card-footer { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px 8px; margin-top: 0; }
-.card-footer-left { flex: 1 1 140px; }
-.card-footer-left:not(:has(> :not(:empty))) { display: none; }
-.item-timestamp { margin-left: auto; text-align: right; max-width: 100%; font-size: .72rem; color: var(--muted); }
-.item-timestamp time { white-space: nowrap; }
 .tags:empty { display: none; }
-.entity-side { gap: 6px; }
-.task-list .entity-side { flex-direction: row; }
 .manage-btn, .complete-task-btn { font-size: .8rem; min-width: 64px; margin-bottom: 0; }
+@media (max-width: 440px) {
+  .task-list .entity-side > button { min-width: 44px; padding-inline: 6px; }
+}
 .entity-description, .note-description { color: var(--muted); font-size: .9rem; }
 .complete-task-btn { color: var(--accent-2); }
 .today-header { padding-bottom: 4px; border-bottom: 1px solid var(--line); }
 .today-header h2 { margin-bottom: 4px; }
 .today-header p { margin: 0 0 var(--space-section); }
 .today-task-card { margin-bottom: 0; }
-.today-task-link { min-height: var(--button-height); line-height: 1.5; }
-.today-tab > .row { margin-top: var(--space-section); }
+.today-task-card .today-task-link {
+  min-height: var(--button-height);
+  max-width: 100%;
+  padding-inline: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  text-align: start;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+:root[data-theme] .today-task-card .today-task-link:hover {
+  transform: none;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: .15em;
+}
+.today-task-meta { display: flex; align-items: baseline; gap: 4px 10px; flex-wrap: wrap; }
+.today-plan-panel { margin-top: var(--space-row); display: grid; gap: var(--space-list); }
+.today-plan-panel > h4, .today-plan-panel > p { margin: 0; overflow-wrap: anywhere; }
+.today-focus > .row { margin-top: var(--space-section); }
+.today-first-label { color: var(--accent-2); font-weight: 700; }
+.review-overview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.review-overview .meta { margin: 0; }
+.task-priority-high { --priority-tone: var(--priority-high); }
+.task-priority-normal { --priority-tone: var(--priority-normal); }
+.task-priority-low { --priority-tone: var(--priority-low); }
+.task-priority-optional { --priority-tone: var(--priority-optional); }
+:root[data-theme] .task-list .entity-card { border-inline-start: 7px solid var(--priority-tone); }
+.task-list .is-dimmed { filter: none; }
+.task-list .card-footer-left .task-deadline { align-self: flex-start; }
+.task-deadline {
+  font-size: .77rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.task-deadline-due {
+  border: 1px solid var(--task-due-line);
+  border-radius: .25rem;
+  padding-inline: .3rem;
+  color: var(--task-due-ink);
+  background: var(--task-due-fill);
+}
+.project-next-task { margin: 0; overflow-wrap: anywhere; }
+.review-project-row { border-top: 1px solid var(--line); padding-top: var(--space-row); }
 .review-grid { --review-grid-row-size: 36px; }
 :root[data-theme="light"] .card, :root[data-theme="light"] .checklist, :root[data-theme="light"] .review-grid-wrap { border-color: var(--line); }
+:root[data-theme] .today-first-focus { border-inline-start: 3px solid var(--accent-2); }
 :root[data-theme="light"] .is-dimmed { filter: none; border-color: var(--line); background: var(--panel-alt); box-shadow: none; }
 :root[data-theme="light"] .is-dimmed .title { color: var(--text); }
 :root[data-theme="light"] .is-in-progress { border-left: 3px solid var(--accent-2); background: var(--panel); box-shadow: none; }

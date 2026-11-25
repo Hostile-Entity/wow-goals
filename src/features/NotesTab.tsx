@@ -2,7 +2,7 @@ import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useState } from 
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AppData, getStatusBucket } from "../state/useAppData";
 import { Note } from "../types";
-import { ItemTimestamp } from "../components/ItemTimestamp";
+import { ItemCard } from "../components/ItemCard";
 import { ExpandableDescription } from "../components/ExpandableDescription";
 
 function PlainNote({ text }: { text: string }) {
@@ -47,45 +47,33 @@ const NoteCard = memo(function NoteCard({
         : "";
 
   return (
-    <article
-      key={note.id}
-      id={`item-note-${note.id}`}
-      className={`card note-card ${cardToneClass}`}
+    <ItemCard
+      type="note"
+      entity={note}
+      className={cardToneClass}
+      actions={
+        <button className="manage-btn" onClick={() => onManage(note)}>Edit</button>
+      }
     >
-      <div className="card-top-row">
-        <div className="note-main">
-          <div className="title note-title">{note.title}</div>
-          {note.description ? (
-            <ExpandableDescription className="note-description">
-              <Suspense fallback={<PlainNote text={note.description} />}>
-                <NoteMarkdown text={note.description} />
-              </Suspense>
-            </ExpandableDescription>
-          ) : null}
-        </div>
-        <div className="note-side">
-          <button
-            className="manage-btn"
-            onClick={() => onManage(note)}
-          >
-            Edit
-          </button>
-        </div>
-      </div>
-      <div className="card-footer">
+      <div className="title note-title">{note.title}</div>
+      {note.description ? (
+        <ExpandableDescription className="note-description">
+          <Suspense fallback={<PlainNote text={note.description} />}>
+            <NoteMarkdown text={note.description} />
+          </Suspense>
+        </ExpandableDescription>
+      ) : null}
+      {(showStatus || note.triagedTo) && (
         <div className="card-footer-left">
-          {showStatus || note.triagedTo ? (
-            <div className="tags note-status">
-              {showStatus ? statusLabel(note) : ""}
-              {note.triagedTo
-                ? `${showStatus ? " → " : "Converted to "}${note.triagedTo}`
-                : ""}
-            </div>
-          ) : null}
+          <div className="tags note-status">
+            {showStatus ? statusLabel(note) : ""}
+            {note.triagedTo
+              ? `${showStatus ? " → " : "Converted to "}${note.triagedTo}`
+              : ""}
+          </div>
         </div>
-        <ItemTimestamp entity={note} />
-      </div>
-    </article>
+      )}
+    </ItemCard>
   );
 });
 

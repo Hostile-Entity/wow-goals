@@ -15,6 +15,7 @@ import { CopyNoteButton } from "./CopyNoteButton";
 import { ConversionContext, ConversionNotice } from "./ConversionNotice";
 import { EntityMetadata } from "./EntityMetadata";
 import { useNoteDescriptionSize } from "./useNoteDescriptionSize";
+import { taskPriorities } from "../state/lifecycle";
 
 interface Props {
   mode: "create" | "edit";
@@ -32,7 +33,9 @@ interface Props {
     revision?: string,
   ): Promise<void>;
   onOpen(type: EntityType, id: string): void;
-  onConverted(type: Exclude<EntityType, "note">, id: string, noteId: string): void;
+  onConverted(type: Exclude<EntityType, "note">, id: string, note: Note): void;
+  onInboxResolved(id: string): void;
+  onCreateSeparateTask(id: string): void;
   conversion?: ConversionContext;
   close(): void;
 }
@@ -50,6 +53,8 @@ export function EntityEditorModal({
   onSaveNote,
   onOpen,
   onConverted,
+  onInboxResolved,
+  onCreateSeparateTask,
   conversion,
   close,
 }: Props) {
@@ -169,7 +174,7 @@ export function EntityEditorModal({
             },
             to,
           );
-          onConverted(to, id, note.id);
+          onConverted(to, id, note);
         },
       );
   }
@@ -266,9 +271,9 @@ export function EntityEditorModal({
                   value={priority}
                   onChange={(e) => setPriority(Number(e.target.value))}
                 >
-                  <option value={1}>High</option>
-                  <option value={2}>Normal</option>
-                  <option value={3}>Low</option>
+                  {taskPriorities.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
                 </select>
               </label>
             </>
@@ -464,6 +469,7 @@ export function EntityEditorModal({
           ) : (
             <>
               <h4>Convert to…</h4>
+              <p className="meta">Convert the whole note, or create a separate task and keep the original note.</p>
               <div className="actions">
                 <button
                   disabled={action.pending || !title.trim()}
@@ -488,6 +494,14 @@ export function EntityEditorModal({
                   onClick={() => triage("routine")}
                 >
                   Routine
+                </button>
+                <button
+                  disabled={action.pending || app.busy}
+                  onClick={() => {
+                    if (guard()) onCreateSeparateTask(note.id);
+                  }}
+                >
+                  Create separate task
                 </button>
               </div>
             </>
@@ -539,6 +553,12 @@ export function EntityEditorModal({
             entity={entity}
             app={app}
             beforeAction={guard}
+            statusRevision={type === "note" && entity.status === "inbox" ? revision : undefined}
+            onStatusChanged={(status) => {
+              if (type === "note" && entity.status === "inbox" && (status === "reference" || status === "archived"))
+                onInboxResolved(entity.id);
+            }}
+            onDeleted={type === "note" && entity.status === "inbox" ? () => onInboxResolved(entity.id) : undefined}
           />
           <EntityMetadata entity={entity} />
         </>

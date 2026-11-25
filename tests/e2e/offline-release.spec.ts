@@ -36,11 +36,11 @@ test("the unmodified production worker caches the whole release and opens every 
   await request.post("/__test/outage");
   expect((await request.get("./")).status()).toBe(503);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Capture & Triage", exact: true })).toBeVisible();
 
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Capture & Triage", exact: true })).toBeVisible();
   await tab(page, "Notes").click();
   await expect(page.getByText("Saved message", { exact: true })).toBeVisible();
   await tab(page, "Tasks").click();
@@ -81,6 +81,6 @@ test("a partial deployment cannot replace the previous complete release", async 
   expect(names).not.toContain("wow-goals-v32");
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Capture & Triage", exact: true })).toBeVisible();
   await expect(page.locator('script[type="module"][src]')).toHaveAttribute("src", /-test31\.js$/);
 });

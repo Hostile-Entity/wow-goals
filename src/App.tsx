@@ -8,13 +8,14 @@ import {
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { BottomTabs } from "./components/BottomTabs";
+import { ConversionContext, ConversionNotice } from "./components/ConversionNotice";
 import { EntityEditorModal } from "./components/EntityEditorModal";
 import { FilterControl } from "./components/FilterControl";
 import { SettingsModal } from "./components/SettingsModal";
 import { TopBar } from "./components/TopBar";
 import { ProjectDetailModal } from "./components/ProjectDetailModal";
 import { GoalDetailModal } from "./components/GoalDetailModal";
-import { EntityType } from "./types";
+import { EntityType, Note } from "./types";
 import { MoreTab } from "./features/MoreTab";
 import { NotesTab } from "./features/NotesTab";
 import { ProjectsTab } from "./features/ProjectsTab";
@@ -32,11 +33,14 @@ type EditorTarget = {
   type: EntityType;
   id?: string;
   detail?: boolean;
+  returnToNote?: string;
 } | null;
+
+type ConversionResult = { type: Exclude<EntityType, "note">; id: string; noteId: string };
 
 function App() {
   const [editor, setEditor] = useState<EditorTarget>(null);
-  const [conversionNoteId, setConversionNoteId] = useState<string | null>(null);
+  const [lastConversion, setLastConversion] = useState<ConversionResult | null>(null);
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -46,15 +50,57 @@ function App() {
     () => typeof window !== "undefined" && window.location.hash === "#/logs",
   );
   const app = useAppData(isLogView);
-  function closeEditor() { setEditor(null); setConversionNoteId(null); }
-  const conversion = conversionNoteId ? {
-    back: () => { closeEditor(); app.setTab("notes"); app.selectFilter("notes", "inbox"); },
-    undo: async () => { await app.undoTriage(conversionNoteId); closeEditor(); app.setTab("notes"); },
+  function editNote(id: string) {
+    setEditor({ mode: "edit", type: "note", id });
+  }
+  function closeEditor() {
+    if (editor?.returnToNote) editNote(editor.returnToNote);
+    else setEditor(null);
+  }
+  function advanceInbox(id: string) {
+    const next = app.nextInboxNote(id);
+    if (next) editNote(next.id);
+    else setEditor(null);
+  }
+  function handleConverted(type: ConversionResult["type"], id: string, note: Note) {
+    setLastConversion({ type, id, noteId: note.id });
+    if (note.status === "inbox") advanceInbox(note.id);
+    else setEditor({ mode: "edit", type, id, detail: type === "project" || type === "goal" });
+  }
+  const viewingResult = !!lastConversion && editor?.type === lastConversion.type && editor.id === lastConversion.id;
+  const reviewing = app.tab === "more" && app.moreTab === "review";
+  const conversion: ConversionContext | undefined = lastConversion ? {
+    open: viewingResult ? undefined : () => setEditor({
+      mode: "edit",
+      type: lastConversion.type,
+      id: lastConversion.id,
+      detail: lastConversion.type === "project" || lastConversion.type === "goal",
+      returnToNote: editor?.type === "note" ? editor.id : undefined,
+    }),
+    back: () => {
+      setLastConversion(null);
+      if (viewingResult) {
+        setEditor(null);
+        if (!reviewing) {
+          app.setTab("notes");
+          app.selectFilter("notes", "inbox");
+        }
+      }
+    },
+    backLabel: reviewing ? "Back to Review" : undefined,
+    undo: async () => {
+      await app.undoTriage(lastConversion.noteId);
+      setLastConversion(null);
+      if (viewingResult) {
+        closeEditor();
+        if (!reviewing) app.setTab("notes");
+      }
+    },
   } : undefined;
   const searchInputRef = useRef<HTMLInputElement>(null);
   const logScrollRef = useRef<HTMLDivElement>(null);
   function openEntity(type: EntityType, id: string) {
-    setConversionNoteId(null);
+    setLastConversion(null);
     setEditor({
       mode: "edit",
       type,
@@ -468,6 +514,7 @@ function App() {
                 <button onClick={() => app.setError("")}>Dismiss</button>
               </div>
             )}
+            {!editor && <ConversionNotice context={conversion} />}
             {app.tab === "notes" && (
               <section>
                 <div className="section-head sticky-head">
@@ -479,9 +526,7 @@ function App() {
                   showStatus={app.showStatus}
                   statusLabel={app.statusLabel}
                   ensureVisibleItemId={scrollTargetId}
-                  onManage={(note) =>
-                    setEditor({ mode: "edit", type: "note", id: note.id })
-                  }
+                  onManage={(note) => editNote(note.id)}
                 />
               </section>
             )}
@@ -517,7 +562,13 @@ function App() {
 
             {app.tab === "more" && (
               <MoreTab
-                notes={app.state.notes}
+                activeNoteCount={app.activeNoteCount}
+                onReviewInbox={() => {
+                  const next = app.nextInboxNote();
+                  if (next) editNote(next.id);
+                }}
+                activeProjects={app.activeProjects}
+                nextProjectTasks={app.nextProjectTasks}
                 onOpen={openEntity}
                 moreTab={app.moreTab}
                 setMoreTab={app.setMoreTab}
@@ -570,6 +621,8 @@ function App() {
                   logicalDay={app.logicalDay}
                   showStatus={app.showStatus}
                   statusLabel={app.statusLabel}
+                  nextProjectTasks={app.nextProjectTasks}
+                  onOpenTask={(id) => openEntity("task", id)}
                   onManage={(project) => openEntity("project", project.id)}
                 />
               </section>
@@ -648,7 +701,7 @@ function App() {
           project={selectedProject}
           app={app}
           close={closeEditor}
-          conversion={conversion}
+          conversion={viewingResult ? conversion : undefined}
           edit={() => setEditor({ ...editor, detail: false })}
           openTask={(id) => openEntity("task", id)}
         />
@@ -659,7 +712,7 @@ function App() {
           goal={selectedGoal}
           app={app}
           close={closeEditor}
-          conversion={conversion}
+          conversion={viewingResult ? conversion : undefined}
           edit={() => setEditor({ ...editor, detail: false })}
           open={openEntity}
         />
@@ -669,8 +722,10 @@ function App() {
           key={`${editor.mode}-${editor.type}-${editor.id ?? "new"}`}
           app={app}
           onOpen={openEntity}
-          conversion={conversion}
-          onConverted={(type, id, noteId) => { openEntity(type, id); setConversionNoteId(noteId); }}
+          conversion={viewingResult || (selectedNote && !selectedNote.triagedTo) ? conversion : undefined}
+          onConverted={handleConverted}
+          onInboxResolved={advanceInbox}
+          onCreateSeparateTask={(id) => setEditor({ mode: "create", type: "task", returnToNote: id })}
           mode={editor.mode}
           type={editor.type}
           entity={
@@ -691,7 +746,10 @@ function App() {
         />
       )}
 
-      {!isSearchMode && <BottomTabs tab={app.tab} setTab={app.setTab} />}
+      {!isSearchMode && <BottomTabs tab={app.tab} setTab={(next) => {
+        if (next !== app.tab) setLastConversion(null);
+        app.setTab(next);
+      }} />}
     </div>
   );
 }

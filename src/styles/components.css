@@ -150,6 +150,19 @@ dialog.modal::backdrop { background: rgba(3, 6, 9, .86); }
 .modal input:not([type=checkbox]), .modal select { min-height: 44px; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, [role=button]:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 3px; }
 
+button.browse-link {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent-2);
+  text-align: start;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  padding-inline: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .more-tabs {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -255,6 +268,45 @@ dialog:is(.entity-editor, .entity-detail) {
   padding: 10px 12px;
 }
 .entity-editor input[type=date] { display: block; width: 100%; }
+
+.item-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.item-card-main,
+.item-card-side,
+.card-footer-left {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.item-card-side {
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-row);
+}
+
+.item-card-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.card-footer-left {
+  margin-top: var(--space-row);
+  gap: var(--space-row);
+}
+
+.item-card .item-timestamp {
+  color: var(--muted);
+  font-size: .72rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .expandable-description {
   white-space: normal;
   overflow-wrap: anywhere;
@@ -262,7 +314,7 @@ dialog:is(.entity-editor, .entity-detail) {
 }
 
 .description-viewport {
-  max-height: 15em; /* Ten rendered lines at 1.5 line-height. */
+  max-height: var(--description-preview-height);
   overflow: hidden;
 }
 

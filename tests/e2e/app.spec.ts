@@ -16,7 +16,7 @@ async function seed(page: Page) {
   await seedDatabase(page);
   await page.goto("./");
   await expect(
-    page.getByRole("heading", { name: "Today", exact: true }),
+    page.getByRole("heading", { name: "Capture & Triage", exact: true }),
   ).toBeVisible();
 }
 test.beforeEach(async ({ request }) => {
@@ -68,7 +68,7 @@ for (const theme of ["light", "wow"] as const) {
     await expect(page.getByRole("alert")).toContainText("Your local data has not been reset");
     await page.evaluate(() => (window as any).__restoreOpeningData());
     await page.getByRole("button", { name: "Retry opening data" }).click();
-    await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Capture & Triage", exact: true })).toBeVisible();
     // Actual database settings win over a stale startup cache.
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     expect(await page.evaluate(() => localStorage.getItem("wowgoals-theme"))).toBe("light");
@@ -165,25 +165,30 @@ test("notes render safe Markdown, expand to full text, and remeasure virtual row
   expect((await records(page, "notes")).find((note) => note.id === "note-a").description).toBe(description);
 });
 
-test("task previews count descriptions only, preserve ten lines, and adapt to wrapping", async ({ page }) => {
+test("task descriptions preview five rendered lines under the title and adapt to wrapping", async ({ page }) => {
   const data = legacyFixture();
-  data.tasks[0].description = Array.from({ length: 11 }, (_, index) => `Task line ${index + 1}`).join("\n");
+  data.tasks[0].description = Array.from({ length: 6 }, (_, index) => `Task line ${index + 1}`).join("\n");
   data.tasks[1].title = "A very long title ".repeat(40);
   data.tasks[1].status = "active";
-  data.tasks[1].description = Array.from({ length: 10 }, (_, index) => `Line ${index + 1}`).join("\n");
+  data.tasks[1].description = Array.from({ length: 5 }, (_, index) => `Line ${index + 1}`).join("\n");
   await seedDatabase(page, data);
   await page.goto("./");
   await tab(page, "Tasks").click();
   const longCard = page.locator("#item-task-task-a");
-  const tenLineCard = page.locator("#item-task-task-b");
-  await expect(tenLineCard.getByRole("button", { name: "Show more" })).toHaveCount(0);
+  const fiveLineCard = page.locator("#item-task-task-b");
+  await expect(fiveLineCard.getByRole("button", { name: "Show more" })).toHaveCount(0);
   await expect(longCard.getByRole("button", { name: "Show more" })).toBeVisible();
+  await expect(longCard.locator(".entity-title + .entity-description")).toHaveCount(1);
+  const viewport = longCard.locator(".description-viewport");
+  const lineCount = await viewport.evaluate(element =>
+    element.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(element).lineHeight));
+  expect(lineCount).toBeCloseTo(5, 1);
   await longCard.getByRole("button", { name: "Show more" }).click();
   await expect(longCard.getByRole("button", { name: "Show less" })).toBeVisible();
   await longCard.getByRole("button", { name: "Show less" }).click();
   await longCard.getByRole("button", { name: "Edit", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Edit task", exact: true });
-  const wrappedText = "wrap ".repeat(80);
+  const wrappedText = "wrap ".repeat(60);
   await editor.getByRole("textbox", { name: "Description", exact: true }).fill(wrappedText);
   await editor.getByRole("button", { name: "Save", exact: true }).click();
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -271,11 +276,12 @@ for (const theme of ["light", "wow"]) {
     data.notes.push({ ...data.notes[0], id: "note-next", title: "Next note" });
     await seedDatabase(page, data);
     await page.goto("./");
+    await tab(page, "Today").click();
     await expect(page.locator(".today-top3-list").first()).toHaveCSS("gap", "8px");
     async function checkCard(selector: string) {
       const card = page.locator(selector);
       await expect(card).toHaveCSS("padding", "6px 12px");
-      await expect(card.locator(".card-footer")).toHaveCSS("margin-top", "0px");
+      await expect(card.locator(".item-card-side")).toHaveCSS("justify-content", "space-between");
       await expect(card.locator(".item-timestamp")).toBeVisible();
       const bottomInset = await card.evaluate(element => {
         const timestamp = element.querySelector(".item-timestamp")!.getBoundingClientRect();
@@ -301,7 +307,7 @@ for (const theme of ["light", "wow"]) {
     await expect(page.locator(".more-tabs")).toHaveCSS("margin-bottom", "8px");
     const review = page.locator(".review-wrap > .card").first();
     await expect(review).toHaveCSS("padding", "6px 12px");
-    await expect(review.getByRole("heading", { name: "Review next actions" })).toHaveCSS("margin-top", "0px");
+    await expect(review.getByRole("heading", { name: "Active projects" })).toHaveCSS("margin-top", "0px");
     await expect(page.locator(".review-wrap")).toHaveCSS("gap", "8px");
     await page.getByRole("button", { name: "Goals", exact: true }).click();
     await checkCard("#item-goal-goal-a");
@@ -403,7 +409,7 @@ test("real v1 transition, compact projects, checklist edits, complete and reopen
   ).toEqual(canonical(raw));
   await tab(page, "Projects").click();
   const card = page.locator("#item-project-project-a");
-  await expect(card.getByText("2 TODOs left")).toBeVisible();
+  await expect(card.getByRole("button", { name: "Overdue task", exact: true })).toBeVisible();
   await expect(card.getByRole("checkbox")).toHaveCount(0);
   await card.getByRole("button", { name: "Open", exact: true }).click();
   let dialog = page.getByRole("dialog", {
@@ -508,6 +514,7 @@ test("direct edit, copy fallback, current-draft conversion and safe undo", async
     description: "Fresh description\nSecond line",
     priority: 2,
   });
+  await page.getByRole("button", { name: "Open result", exact: true }).click();
   await expect(page.getByRole("button", { name: "Back to Inbox", exact: true })).toBeVisible();
   await expect(
     page
@@ -527,11 +534,12 @@ test("direct edit, copy fallback, current-draft conversion and safe undo", async
   ).toBe("Edited message");
 });
 
-test("converted tasks show Normal alongside High and Low priorities without a banner", async ({ page }) => {
+test("converted tasks keep Normal priority without showing priority labels or a banner", async ({ page }) => {
   await seed(page);
   await tab(page, "Notes").click();
   await page.locator("#item-note-note-a").getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Task", exact: true }).click();
+  await page.getByRole("button", { name: "Open result", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Edit task", exact: true });
   await editor.getByRole("button", { name: "Back to Inbox", exact: true }).click();
   await expect(editor).not.toBeVisible();
@@ -540,17 +548,19 @@ test("converted tasks show Normal alongside High and Low priorities without a ba
 
   await tab(page, "Tasks").click();
   const card = page.locator(".task-list article").filter({ hasText: "Saved message" });
-  await expect(card.getByText("Normal", { exact: true })).toBeVisible();
-  await expect(page.locator("#item-task-task-a .entity-summary")).toContainText("Low");
+  await expect(card).toHaveAccessibleName("Saved message, normal priority");
+  await expect(card.getByText("Normal", { exact: true })).toHaveCount(0);
+  await expect(page.locator("#item-task-task-a")).toHaveAccessibleName("Overdue task, low priority");
   await page.getByRole("button", { name: "View: To do", exact: true }).click();
   await page.locator(".filter-menu").getByRole("button", { name: "Active", exact: true }).click();
-  await expect(page.locator("#item-task-task-b").getByText("High", { exact: true })).toBeVisible();
+  await expect(page.locator("#item-task-task-b")).toHaveAccessibleName("task-b, high priority");
 });
 
 test("focus tasks and snooze preserve real deadlines without a banner", async ({
   page,
 }) => {
   await seed(page);
+  await tab(page, "Today").click();
   await page
     .getByRole("combobox", { name: "Choose focus task" })
     .selectOption("task-b");
@@ -561,7 +571,7 @@ test("focus tasks and snooze preserve real deadlines without a banner", async ({
   const urgent = page
     .locator(".today-task-card")
     .filter({ hasText: "Overdue task" });
-  await urgent.getByRole("button", { name: "Later", exact: true }).click();
+  await urgent.getByRole("button", { name: "Replan", exact: true }).click();
   await page.getByRole("button", { name: "Next week", exact: true }).click();
   await expect(urgent).toContainText(/planned for \d{4}-\d{2}-\d{2}/);
   await expect(page.getByRole("main").getByRole("status")).toHaveCount(0);
@@ -570,6 +580,7 @@ test("focus tasks and snooze preserve real deadlines without a banner", async ({
   ).toBe("2026-10-11");
   await expect(urgent).toBeVisible();
   await page.reload();
+  await tab(page, "Today").click();
   await expect(
     page.getByRole("button", { name: "Unpin focus", exact: true }),
   ).toBeVisible();
@@ -761,7 +772,7 @@ test("installed worker version stays accurate and manual update preserves captur
   await expect(page.getByText("Version: v31", { exact: true })).toBeVisible();
   const staged = await context.newPage();
   await staged.goto("./");
-  await expect(staged.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(staged.getByRole("heading", { name: "Capture & Triage", exact: true })).toBeVisible();
   await expect(staged.locator('script[type="module"][src]')).toHaveAttribute("src", oldEntry!);
   await staged.close();
   page.once("dialog", (dialog) => dialog.accept());
@@ -780,7 +791,7 @@ test("installed worker version stays accurate and manual update preserves captur
   expect(await entry()).toMatch(/-test32\.js$/);
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Capture & Triage", exact: true })).toBeVisible();
   expect(await entry()).toMatch(/-test32\.js$/);
 });
 
@@ -809,7 +820,7 @@ test("blocked one-time upgrade waits for the old window without resetting data",
   ).toBe(1);
   await old.close();
   await expect(
-    page.getByRole("heading", { name: "Today", exact: true }),
+    page.getByRole("heading", { name: "Capture & Triage", exact: true }),
   ).toBeVisible();
   expect(await records(page, "notes")).toHaveLength(2);
   expect(
@@ -947,7 +958,10 @@ test("fresh create flows, task completion, daily routine, review and full reset"
     .getByRole("textbox", { name: "TODO source", exact: true })
     .fill("[ ] Prepare\n[x] Research");
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(page.getByText("1 TODOs left", { exact: true })).toBeVisible();
+  await page.locator(".entity-card").filter({ hasText: "Fresh project" })
+    .getByRole("button", { name: "Open", exact: true }).click();
+  await expect(page.getByRole("dialog").getByText(/1 TODOs left/)).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
   await tab(page, "More").click();
   await page.getByRole("button", { name: "Goals", exact: true }).click();
   await page.getByRole("button", { name: "+ Goal", exact: true }).click();
@@ -966,12 +980,12 @@ test("fresh create flows, task completion, daily routine, review and full reset"
     .getByRole("combobox", { name: "Goal", exact: true })
     .selectOption({ label: "Health" });
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
-  await tab(page, "Today").click();
-  await page.getByRole("button", { name: "Stretch", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "✓ Stretch", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
-  await tab(page, "More").click();
+  await page.locator(".entity-card").filter({ hasText: "Stretch" })
+    .getByRole("button", { name: "Edit", exact: true }).click();
+  dialog = page.getByRole("dialog", { name: "Edit routine", exact: true });
+  await dialog.getByRole("button", { name: "Done today", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Undo today's completion", exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: "Review", exact: true }).click();
   await page.getByPlaceholder("What changed this week?").fill("A useful week");
   await page
@@ -1046,7 +1060,7 @@ test("a real failed upgrade preserves v1 data and can retry without a reset", as
     .getByRole("button", { name: "Retry opening data", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Today", exact: true }),
+    page.getByRole("heading", { name: "Capture & Triage", exact: true }),
   ).toBeVisible();
   expect(await records(page, "tasks")).toHaveLength(4);
   expect((await records(page, "notes"))[0].status).toBe("inbox");
@@ -1075,7 +1089,7 @@ test(`v${version} upgrade preserves every record, uses only comfortable cards an
     });
   }, { data, version });
   await page.goto("./");
-  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Capture & Triage", exact: true })).toBeVisible();
   for (const [store, before] of Object.entries(data)) {
     const after = await records(page, store);
     if (store === "settings") expect(after[0]).toEqual({ ...before, listDensity: "comfortable" });
@@ -1115,13 +1129,14 @@ test(`v${version} upgrade preserves every record, uses only comfortable cards an
 
 test("focused urgent tasks appear only once, with due and archived-project exceptions visible", async ({ page }) => {
   await seed(page);
+  await tab(page, "Today").click();
   await page.getByRole("combobox", { name: "Choose focus task" }).selectOption("task-a");
   await page.getByRole("button", { name: "Pin", exact: true }).click();
   const urgent = page.locator(".today-task-card").filter({ hasText: "Overdue task" });
   await expect(urgent).toHaveCount(1);
   await expect(urgent.getByText(/Overdue by/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Unpin focus", exact: true })).toBeVisible();
-  await urgent.getByRole("button", { name: "Later", exact: true }).click();
+  await urgent.getByRole("button", { name: "Replan", exact: true }).click();
   await page.getByRole("button", { name: "Next week", exact: true }).click();
   await expect(urgent).toHaveCount(1);
   await expect(urgent).toBeVisible();
@@ -1135,11 +1150,12 @@ test("focused urgent tasks appear only once, with due and archived-project excep
   await expect(urgent).toContainText("project archived");
 });
 
-test("project conversion opens its result, Back to Inbox works, delete is directly accessible", async ({ page }) => {
+test("project conversion offers its result, Back to Inbox works, delete is directly accessible", async ({ page }) => {
   await seed(page);
   await tab(page, "Notes").click();
   await page.locator("#item-note-note-a").getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Project", exact: true }).click();
+  await page.getByRole("button", { name: "Open result", exact: true }).click();
   const result = page.getByRole("dialog", { name: "Saved message", exact: true });
   await expect(result.getByRole("button", { name: "Back to Inbox", exact: true })).toBeVisible();
   await expect(result.getByText("Danger zone", { exact: true })).toHaveCount(0);
@@ -1152,19 +1168,46 @@ test("project conversion opens its result, Back to Inbox works, delete is direct
   await expect(page.locator("#item-note-note-a")).toBeVisible();
 });
 
-test("all collection cards show a bottom-right timestamp, including updated notes", async ({ page }) => {
+test("all collection cards keep content and actions in separate columns with a date-only label", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
   await seed(page);
+  async function checkCard(selector: string, label = "Created") {
+    const card = page.locator(selector);
+    const timestamp = card.locator(".item-card-side .item-timestamp");
+    const date = timestamp.locator("time");
+    await expect(timestamp).toContainText(label);
+    const expected = await date.evaluate(element =>
+      new Date(element.getAttribute("datetime")!).toLocaleDateString(undefined, {
+        year: "numeric", month: "2-digit", day: "2-digit",
+      }),
+    );
+    await expect(date).toHaveText(expected);
+    const geometry = await card.evaluate(element => {
+      const bounds = (selector: string) => element.querySelector(selector)!.getBoundingClientRect();
+      const content = bounds(".item-card-main");
+      const actions = bounds(".item-card-actions");
+      const side = bounds(".item-card-side");
+      const date = bounds(".item-timestamp");
+      return {
+        columnGap: side.left - content.right,
+        actionTop: actions.top - content.top,
+        dateBottom: date.bottom - content.bottom,
+        dateRight: date.right - side.right,
+      };
+    });
+    expect(geometry.columnGap).toBeGreaterThan(0);
+    expect(geometry.actionTop).toBeCloseTo(0, 0);
+    expect(geometry.dateBottom).toBeCloseTo(0, 0);
+    expect(geometry.dateRight).toBeCloseTo(0, 0);
+  }
   for (const [name, selector] of [["Notes", "#item-note-note-a"], ["Tasks", "#item-task-task-a"], ["Projects", "#item-project-project-a"]]) {
     await tab(page, name).click();
-    const timestamp = page.locator(selector).locator(".card-footer .item-timestamp");
-    await expect(timestamp).toBeVisible();
-    await expect(timestamp).toContainText("Created");
-    expect(await timestamp.evaluate(el => getComputedStyle(el).textAlign)).toBe("right");
+    await checkCard(selector);
   }
   await tab(page, "More").click();
   for (const [name, selector] of [["Goals", "#item-goal-goal-a"], ["Routines", "#item-routine-routine-a"]]) {
     await page.getByRole("button", { name, exact: true }).click();
-    await expect(page.locator(selector).locator(".card-footer .item-timestamp")).toBeVisible();
+    await checkCard(selector);
   }
   await tab(page, "Notes").click();
   const card = page.locator("#item-note-note-a");
@@ -1172,8 +1215,9 @@ test("all collection cards show a bottom-right timestamp, including updated note
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Title", exact: true }).fill("Updated phone note");
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(card.locator(".item-timestamp")).toContainText("Updated");
+  await checkCard("#item-note-note-a", "Updated");
   await expect(card.locator("time")).toHaveAttribute("datetime", (await records(page, "notes")).find(n => n.id === "note-a").updatedAt);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test("phone editor keeps stacked fields, a separate reachable Save bar, and no horizontal overflow", async ({ page }) => {
@@ -1213,7 +1257,7 @@ test("task editing hides planning, keeps compact actions, and preserves schedule
   const data = legacyFixture();
   await seedDatabase(page, data);
   await page.goto("./");
-  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Capture & Triage", exact: true })).toBeVisible();
   const scheduledFor = (await records(page, "tasks")).find(task => task.id === "task-a").scheduledFor;
   expect(scheduledFor).toBeTruthy();
   await expect(page.getByRole("button", { name: "View all tasks", exact: true })).toHaveCount(0);
@@ -1337,6 +1381,10 @@ test("Archive is reversible while Delete is permanent and requires confirmation"
   expect((await records(page, "notes")).find(n => n.id === "note-a").status).toBe("inbox");
   await editor.getByRole("button", { name: "Archive", exact: true }).click();
   await expect.poll(async () => (await records(page, "notes")).find(n => n.id === "note-a").status).toBe("archived");
+  await expect(editor).toHaveCount(0);
+  await page.getByRole("button", { name: "View: Inbox", exact: true }).click();
+  await page.getByRole("button", { name: "Archived", exact: true }).click();
+  await page.locator("#item-note-note-a").getByRole("button", { name: "Edit", exact: true }).click();
   await editor.getByRole("button", { name: "Unarchive to Inbox", exact: true }).click();
   await expect.poll(async () => (await records(page, "notes")).find(n => n.id === "note-a").status).toBe("inbox");
   page.once("dialog", dialog => dialog.accept());
@@ -1410,12 +1458,13 @@ test("note composer centers one line and still grows, scrolls and captures multi
 
 test("Today shows its controls without instructional paragraphs", async ({ page }) => {
   await seed(page);
+  await tab(page, "Today").click();
   await expect(page.getByText("Choose up to three priorities for today.", { exact: true })).toHaveCount(0);
   await expect(page.getByText(/No focus tasks yet\. Pick an open task/)).toHaveCount(0);
   await expect(page.getByText(/Due and overdue work stays visible/)).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "Choose focus task" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Pin", exact: true })).toBeVisible();
-  await page.locator(".today-task-card").filter({ hasText: "Overdue task" }).getByRole("button", { name: "Later", exact: true }).click();
+  await page.locator(".today-task-card").filter({ hasText: "Overdue task" }).getByRole("button", { name: "Replan", exact: true }).click();
   await expect(page.getByText("The deadline does not change. Urgent deadlines remain visible.", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Tomorrow", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Next week", exact: true })).toBeVisible();

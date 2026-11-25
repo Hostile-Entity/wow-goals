@@ -7,12 +7,15 @@ import {
 } from "../state/useAppData";
 import { EntityType, Goal, Routine } from "../types";
 import { isOpen } from "../state/lifecycle";
-import { ItemTimestamp } from "../components/ItemTimestamp";
+import { ItemCard } from "../components/ItemCard";
 
 const ReviewTab = lazy(() => import("./ReviewTab").then(({ ReviewTab }) => ({ default: ReviewTab })));
 
 interface MoreTabProps {
-  notes: AppData["state"]["notes"];
+  activeNoteCount: AppData["activeNoteCount"];
+  onReviewInbox(): void;
+  activeProjects: AppData["activeProjects"];
+  nextProjectTasks: AppData["nextProjectTasks"];
   onOpen(type: EntityType, id: string): void;
   moreTab: MoreTabId;
   setMoreTab(tab: MoreTabId): void;
@@ -41,7 +44,10 @@ interface MoreTabProps {
 }
 
 export function MoreTab({
-  notes,
+  activeNoteCount,
+  onReviewInbox,
+  activeProjects,
+  nextProjectTasks,
   onOpen,
   moreTab,
   setMoreTab,
@@ -131,45 +137,32 @@ export function MoreTab({
                     : "";
 
               return (
-                <article
+                <ItemCard
                   key={routine.id}
-                  id={`item-routine-${routine.id}`}
-                  className={`card entity-card ${cardToneClass}`}
+                  type="routine"
+                  entity={routine}
+                  className={cardToneClass}
+                  actions={
+                    <button className="manage-btn" onClick={() => onManageRoutine(routine)}>Edit</button>
+                  }
                 >
-                  <div className="card-top-row">
-                    <div className="entity-main">
-                      <div className="title entity-title">{routine.title}</div>
-                      {routine.description ? (
-                        <div className="entity-description">
-                          {routine.description}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="entity-side">
-                      <button
-                        className="manage-btn"
-                        onClick={() => onManageRoutine(routine)}
-                      >
-                        Edit
-                      </button>
-                    </div>
-                  </div>
-                  <div className="card-footer">
+                  <div className="title entity-title">{routine.title}</div>
+                  {routine.description && <div className="entity-description">{routine.description}</div>}
+                  {(showStatus || routine.goalId) && (
                     <div className="card-footer-left">
-                      {showStatus ? (
+                      {showStatus && (
                         <div className="tags entity-status entity-footer-meta">
                           {statusLabel(routine)}
                         </div>
-                      ) : null}
-                      <div className="tags entity-summary entity-footer-meta">
-                        {routine.goalId
-                          ? `goal ${goalById.get(routine.goalId) ?? "Unknown"}`
-                          : ""}
-                      </div>
+                      )}
+                      {routine.goalId && (
+                        <div className="tags entity-summary entity-footer-meta">
+                          goal {goalById.get(routine.goalId) ?? "Unknown"}
+                        </div>
+                      )}
                     </div>
-                    <ItemTimestamp entity={routine} />
-                  </div>
-                </article>
+                  )}
+                </ItemCard>
               );
             })}
           </div>
@@ -193,65 +186,54 @@ export function MoreTab({
                     ? "is-dimmed"
                     : "";
               return (
-                <article
+                <ItemCard
                   key={goal.id}
-                  id={`item-goal-${goal.id}`}
-                  className={`card entity-card ${cardToneClass}`}
+                  type="goal"
+                  entity={goal}
+                  className={cardToneClass}
+                  actions={
+                    <button className="manage-btn" onClick={() => onManageGoal(goal)}>Open</button>
+                  }
                 >
-                  <div className="card-top-row">
-                    <div className="entity-main">
-                      <div className="title entity-title">{goal.title}</div>
-                      <div className="goal-metric-stack">
-                        {[pMetric].map((metric) => {
-                          const progress =
-                            metric.target > 0
-                              ? Math.min(
-                                  100,
-                                  Math.round(
-                                    (metric.current / metric.target) * 100,
-                                  ),
-                                )
-                              : 0;
-                          return (
-                            <div key={metric.id} className="goal-metric-item">
-                              <div className="tags entity-summary">
-                                {metric.name}: {metric.current}/{metric.target}{" "}
-                                ({progress}%)
-                              </div>
-                              <div className="bar">
-                                <i style={{ width: `${progress}%` }} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="entity-side">
-                      <button
-                        className="manage-btn"
-                        onClick={() => onManageGoal(goal)}
-                      >
-                        Open
-                      </button>
-                    </div>
-                  </div>
-                  <div className="card-footer">
-                    <div className="card-footer-left">
-                      {showStatus ? (
-                        <div className="tags entity-status entity-footer-meta">
-                          {statusLabel(goal)}
+                  <div className="title entity-title">{goal.title}</div>
+                  <div className="goal-metric-stack">
+                    {[pMetric].map((metric) => {
+                      const progress =
+                        metric.target > 0
+                          ? Math.min(
+                              100,
+                              Math.round(
+                                (metric.current / metric.target) * 100,
+                              ),
+                            )
+                          : 0;
+                      return (
+                        <div key={metric.id} className="goal-metric-item">
+                          <div className="tags entity-summary">
+                            {metric.name}: {metric.current}/{metric.target}{" "}
+                            ({progress}%)
+                          </div>
+                          <div className="bar">
+                            <i style={{ width: `${progress}%` }} />
+                          </div>
                         </div>
-                      ) : null}
-                      <div className="tags entity-summary entity-footer-meta">
-                        open linked:{" "}
-                        {linkedProjectCountByGoal.get(goal.id) ?? 0} projects,{" "}
-                        {linkedTaskCountByGoal.get(goal.id) ?? 0} tasks,{" "}
-                        {linkedRoutineCountByGoal.get(goal.id) ?? 0} routines
-                      </div>
-                    </div>
-                    <ItemTimestamp entity={goal} />
+                      );
+                    })}
                   </div>
-                </article>
+                  <div className="card-footer-left">
+                    {showStatus && (
+                      <div className="tags entity-status entity-footer-meta">
+                        {statusLabel(goal)}
+                      </div>
+                    )}
+                    <div className="tags entity-summary entity-footer-meta">
+                      open linked:{" "}
+                      {linkedProjectCountByGoal.get(goal.id) ?? 0} projects,{" "}
+                      {linkedTaskCountByGoal.get(goal.id) ?? 0} tasks,{" "}
+                      {linkedRoutineCountByGoal.get(goal.id) ?? 0} routines
+                    </div>
+                  </div>
+                </ItemCard>
               );
             })}
           </div>
@@ -264,7 +246,10 @@ export function MoreTab({
           <Suspense fallback={<p className="meta" role="status">Loading review…</p>}>
             {reviewReady ? (
               <ReviewTab
-                notes={notes}
+                activeNoteCount={activeNoteCount}
+                onReviewInbox={onReviewInbox}
+                activeProjects={activeProjects}
+                nextProjectTasks={nextProjectTasks}
                 tasks={tasks}
                 onOpen={onOpen}
                 logicalDay={logicalDay}

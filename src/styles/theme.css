@@ -24,6 +24,13 @@
   --accent: var(--wow-green);
   --accent-2: var(--wow-gold);
   --danger: var(--wow-red);
+  --priority-high: #9c352c;
+  --priority-normal: #765209;
+  --priority-low: #355e28;
+  --priority-optional: #555d69;
+  --task-due-ink: #674508;
+  --task-due-fill: #fcf1d9;
+  --task-due-line: #ac864d;
   --ok: var(--wow-green);
   --line: var(--wow-border-soft);
   --radius: 12px;
@@ -66,6 +73,15 @@
   --wow-text: #f5f3e7;
   --wow-text-muted: #c3b79b;
   --wow-red: #ff4a4a;
+  /* Wrath 3.3.5a QuestDifficultyColors, also used for hostile target levels.
+     https://github.com/wowgaming/3.3.5-interface-files/blob/d0339b17b0221db76e6acd2dc2915d224a5b62ca/Constants.lua#L403-L409 */
+  --priority-high: rgb(100% 10% 10%);
+  --priority-normal: rgb(100% 100% 0%);
+  --priority-low: rgb(25% 75% 25%);
+  --priority-optional: rgb(50% 50% 50%);
+  --task-due-ink: #ffe1ab;
+  --task-due-fill: #332819;
+  --task-due-line: #a88c5f;
   --wow-green: #1eff00;
   --wow-shadow-strong: 0 0 18px rgba(0, 0, 0, 0.95);
   --wow-font: Verdana, "Open Sans", Arial, "Helvetica Neue", Helvetica, sans-serif;

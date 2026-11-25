@@ -50,7 +50,7 @@ test("pinned notes sort first, conversion archives them, and undo returns to the
   await note.getByRole("button", { name: "Edit", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Edit note", exact: true });
   await editor.getByRole("button", { name: "Pin", exact: true }).click();
-  await expect(editor.getByRole("button", { name: "Move to Inbox", exact: true })).toBeVisible();
+  await expect(editor.getByRole("textbox", { name: "Title" })).toHaveValue("Newer inbox note");
   await editor.getByRole("button", { name: "Close", exact: true }).click();
   await expect(note).toHaveCount(0);
   await view(page, "All items");
@@ -115,6 +115,7 @@ test("routine Completed means today, survives archive/unarchive, and resets at t
 test("task Active and Archived views work, completing records history, and permanent deletion clears focus", async ({ page }) => {
   await seedDatabase(page, legacyFixture(), {});
   await page.goto("./");
+  await tab(page, "Today").click();
   await page.getByRole("combobox", { name: "Choose focus task" }).selectOption("task-a");
   await page.getByRole("button", { name: "Pin", exact: true }).click();
   await tab(page, "Tasks").click();

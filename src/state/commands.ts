@@ -199,7 +199,7 @@ export function triageCommand(
   ];
 }
 export function undoTriageCommand(
-  records: Records<EntityStore<EntityType> | "completions">,
+  records: Records<EntityStore<EntityType> | "completions" | "settings">,
   id: string,
   day: string,
 ): Change<EntityStore<EntityType> | "logs">[] {
@@ -211,6 +211,7 @@ export function undoTriageCommand(
   const destination = findEntity(records, note.triagedTo, note.triagedId);
   if (
     destination.updatedAt !== destination.createdAt ||
+    (note.triagedTo === "task" && records.settings[0]?.focusTaskIds.includes(destination.id)) ||
     records.tasks.some(
       (task) =>
         task.projectId === destination.id || task.goalId === destination.id,

@@ -1,14 +1,14 @@
-import { ReactNode, useId, useLayoutEffect, useRef, useState } from "react";
-
-const PREVIEW_LINES = 10;
+import { CSSProperties, ReactNode, useId, useLayoutEffect, useRef, useState } from "react";
 
 /** Measure rendered height, so wrapping and Markdown count, but titles do not. */
 export function ExpandableDescription({
   children,
   className,
+  previewLines = 10,
 }: {
   children: ReactNode;
   className: string;
+  previewLines?: number;
 }) {
   const id = useId();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -20,7 +20,7 @@ export function ExpandableDescription({
     if (!content) return;
     const measure = () => {
       const lineHeight = Number.parseFloat(getComputedStyle(content).lineHeight);
-      const tooLong = content.scrollHeight > lineHeight * PREVIEW_LINES + 1;
+      const tooLong = content.scrollHeight > lineHeight * previewLines + 1;
       setOverflows(tooLong);
       if (!tooLong) setExpanded(false);
     };
@@ -28,10 +28,13 @@ export function ExpandableDescription({
     const observer = new ResizeObserver(measure);
     observer.observe(content);
     return () => observer.disconnect();
-  }, [children]);
+  }, [children, previewLines]);
 
   return (
-    <div className={`${className} expandable-description`}>
+    <div
+      className={`${className} expandable-description`}
+      style={{ "--description-preview-height": `${previewLines}lh` } as CSSProperties}
+    >
       <div
         id={id}
         className={`description-viewport${expanded ? " is-expanded" : ""}`}

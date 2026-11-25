@@ -18,7 +18,6 @@ import {
   DailyCompletion,
   EntityType,
   EventLog,
-  Note,
   Project,
   Routine,
   Task,
@@ -28,9 +27,13 @@ import { historicalRows, projectProgressByDay } from "../state/history";
 import { isOpen } from "../state/lifecycle";
 import { WeeklyReviewDrafts } from "../state/useWeeklyReviewDrafts";
 import { ReviewFields, reviewFields } from "../state/weeklyReview";
+import { ProjectNextTask } from "../components/ProjectNextTask";
 
 interface ReviewTabProps {
-  notes: Note[];
+  activeNoteCount: number;
+  onReviewInbox(): void;
+  activeProjects: Project[];
+  nextProjectTasks: ReadonlyMap<string, Task>;
   tasks: Task[];
   onOpen(type: EntityType, id: string): void;
   logicalDay: string;
@@ -75,7 +78,10 @@ function buildTrackedStartDay(
 }
 
 export function ReviewTab({
-  notes,
+  activeNoteCount,
+  onReviewInbox,
+  activeProjects,
+  nextProjectTasks,
   tasks,
   onOpen,
   logicalDay,
@@ -262,8 +268,7 @@ export function ReviewTab({
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <section className="card">
-        <h3>Review next actions</h3>
+      <section className="review-overview" aria-label="Review overview">
         <p className="meta">
           {
             tasks.filter(
@@ -271,53 +276,24 @@ export function ReviewTab({
                 isOpen(task) && task.deadline && task.deadline < logicalDay,
             ).length
           }{" "}
-          overdue tasks ·{" "}
-          {notes.filter((note) => note.status === "inbox").length} untriaged
-          notes ·{" "}
-          {
-            projects.filter(
-              (project) =>
-                isOpen(project) &&
-                project.updatedAt.slice(0, 10) < addDays(logicalDay, -7),
-            ).length
-          }{" "}
-          quiet projects
+           overdue tasks · {activeNoteCount} untriaged notes
         </p>
+        {activeNoteCount > 0 && (
+          <button onClick={onReviewInbox}>Review inbox</button>
+        )}
+      </section>
+      <section className="card">
+        <h3>Active projects</h3>
         <div className="cards">
-          {tasks
-            .filter(
-              (task) =>
-                isOpen(task) && task.deadline && task.deadline < logicalDay,
-            )
-            .slice(0, 5)
-            .map((task) => (
-              <button key={task.id} onClick={() => onOpen("task", task.id)}>
-                Overdue: {task.title}
+          {!activeProjects.length && <p className="meta">No active projects.</p>}
+          {activeProjects.map((project) => (
+            <div className="review-project-row" key={project.id}>
+              <button className="browse-link title" onClick={() => onOpen("project", project.id)}>
+                {project.title}
               </button>
-            ))}
-          {notes
-            .filter((note) => note.status === "inbox")
-            .slice(0, 3)
-            .map((note) => (
-              <button key={note.id} onClick={() => onOpen("note", note.id)}>
-                Triage: {note.title}
-              </button>
-            ))}
-          {projects
-            .filter(
-              (project) =>
-                isOpen(project) &&
-                project.updatedAt.slice(0, 10) < addDays(logicalDay, -7),
-            )
-            .slice(0, 3)
-            .map((project) => (
-              <button
-                key={project.id}
-                onClick={() => onOpen("project", project.id)}
-              >
-                Revisit: {project.title}
-              </button>
-            ))}
+              <ProjectNextTask task={nextProjectTasks.get(project.id)} onOpen={(id) => onOpen("task", id)} />
+            </div>
+          ))}
         </div>
       </section>
       <div className="review-week-header">

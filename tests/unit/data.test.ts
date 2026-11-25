@@ -253,6 +253,15 @@ describe("backup safety", () => {
     const data = migrated();
     expect(parseBackup(backupPayload(data))).toEqual(data);
   });
+  it("round trips Optional without reclassifying old priorities and rejects unknown values", () => {
+    const data = migrated();
+    data.tasks.push({ ...data.tasks[0], id: "optional", priority: 4 });
+    expect(parseBackup(backupPayload(data))).toEqual(data);
+    expect(parseBackup({ app: "wow-goals", schemaVersion: 1, data: legacyFixture() }).tasks[0])
+      .toMatchObject({ priority: 3, legacyPriority: 9 });
+    data.tasks.at(-1)!.priority = 5;
+    expect(() => parseBackup(backupPayload(data))).toThrow("invalid task priority");
+  });
   it("restores a v1 backup once without changing source data", () => {
     const raw = { app: "wow-goals", schemaVersion: 1, data: legacyFixture() };
     expect(parseBackup(raw)).toEqual(migrated());

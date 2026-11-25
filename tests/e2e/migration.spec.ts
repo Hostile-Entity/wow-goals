@@ -83,7 +83,7 @@ for (const keyless of [false, true]) {
     const before = await seedV4(page, keyless);
     const oldMeta = await records(page, "meta");
     await page.goto("./");
-    await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Capture & Triage", exact: true })).toBeVisible();
     const after = await snapshot(page, before);
     expect(canonical(after)).toEqual(canonical(expectedUpgrade(before)));
     const meta = await records(page, "meta");
@@ -114,7 +114,7 @@ for (const keyless of [false, true]) {
       };
     });
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Capture & Triage", exact: true })).toBeVisible();
     expect(canonical(await snapshot(page, before))).toEqual(canonical(edited));
     expect(await records(page, "meta")).toEqual(meta);
   });
@@ -128,7 +128,7 @@ for (const version of [DB_VERSION - 1, DB_VERSION + 1]) {
     await expect(page.getByRole("alert")).toContainText("newer WowGoals schema");
     await page.getByRole("button", { name: "Retry opening data", exact: true }).click();
     await expect(page.getByRole("alert")).toContainText("newer WowGoals schema");
-    await expect(page.getByRole("heading", { name: "Today", exact: true })).not.toBeVisible();
+    await expect(page.getByRole("heading", { name: "Capture & Triage", exact: true })).not.toBeVisible();
     expect(canonical(await snapshot(page, before))).toEqual(canonical(before));
     expect(await records(page, "meta")).toEqual(oldMeta);
     expect(await records(page, "future-only")).toEqual(["future record"]);
@@ -168,7 +168,7 @@ test("a late v4 upgrade quota failure leaves the complete original database inta
   expect(version).toBe(4);
   await page.evaluate(() => { (window as any).__failMigration = false; });
   await page.getByRole("button", { name: "Retry opening data", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Capture & Triage", exact: true })).toBeVisible();
   expect(canonical(await snapshot(page, before))).toEqual(canonical(expectedUpgrade(before)));
   expect(canonical((await records(page, "meta")).find(row => row.id === "pre-v5").data.data)).toEqual(canonical(before));
 });

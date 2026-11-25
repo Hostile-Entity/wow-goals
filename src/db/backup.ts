@@ -97,7 +97,7 @@ function validateBackup(raw: unknown): { data: AppStateData; version: number } {
     if (
       !Number.isInteger(task.priority) ||
       task.priority < 1 ||
-      (raw.schemaVersion >= 2 && task.priority > 3) ||
+      (raw.schemaVersion >= 2 && task.priority > (raw.schemaVersion >= 5 ? 4 : 3)) ||
       !Number.isInteger(task.postponedCount) ||
       task.postponedCount < 0
     )
